@@ -1352,7 +1352,34 @@ async function deleteCheatsheet(id){
 // ══════ STUDENTS ══════
 function pgTStudents(){
   document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-p" onclick="openAddEmail()">+ Добавить</button>`;
-  document.getElementById('main-content').innerHTML=`<div class="card"><div class="card-b" style="padding:8px 0">${db.students.map(s=>`<div class="srow" style="padding:13px 22px"><div class="sav" style="background:rgba(124,58,237,.15);color:var(--ac2)">${s.name[0]}</div><div style="flex:1;min-width:0"><div class="sname">${s.name}</div><div style="font-size:12px;color:var(--mu)">${s.email}</div></div><div class="smeta">${db.hw.filter(h=>h.answers.some(a=>a.email===s.email)).length} ДЗ</div><button class="btn btn-ic btn-sm" style="margin-left:10px" onclick="revokeEmail('${s.email}');pgTStudents()">✕</button></div>`).join('')||'<div class="empty"><div class="empty-ic">◉</div><div class="empty-tx">Нет учеников</div></div>'}</div></div>`;
+  document.getElementById('main-content').innerHTML=`<div class="card"><div class="card-b" style="padding:8px 0">${db.students.map(s=>`<div class="srow" style="padding:13px 22px"><div class="sav" style="background:rgba(124,58,237,.15);color:var(--ac2)">${s.name[0]}</div><div style="flex:1;min-width:0"><div class="sname">${s.name}</div><div style="font-size:12px;color:var(--mu)">${s.email}</div></div><div class="smeta">${db.hw.filter(h=>h.answers.some(a=>a.email===s.email)).length} ДЗ</div><button class="btn btn-g btn-sm" style="margin-left:6px" onclick="renameStudent('${s.email}')">✎</button><button class="btn btn-ic btn-sm" style="margin-left:4px" onclick="revokeEmail('${s.email}');pgTStudents()">✕</button></div>`).join('')||'<div class="empty"><div class="empty-ic">◉</div><div class="empty-tx">Нет учеников</div></div>'}</div></div>`;
+}
+function renameStudent(email){
+  const s=db.students.find(x=>x.email===email);
+  if(!s)return;
+  openModal('Переименовать',`
+    <div class="fg"><label class="fl">Имя ученика</label><input class="fi" id="rn-inp" value="${s.name.replace(/"/g,'&quot;')}" placeholder="Имя Фамилия"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+      <button class="btn btn-g" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-p" onclick="doRenameStudent('${email}')">Сохранить</button>
+    </div>`);
+  setTimeout(()=>{const el=document.getElementById('rn-inp');if(el){el.focus();el.select();}},80);
+}
+function doRenameStudent(email){
+  const inp=document.getElementById('rn-inp');
+  const newName=inp?inp.value.trim():'';
+  if(!newName){notify('Введи имя');return;}
+  const s=db.students.find(x=>x.email===email);
+  if(!s)return;
+  const old=s.name;
+  s.name=newName;
+  // Обновляем имя в сданных ДЗ и тестах
+  db.hw.forEach(h=>h.answers.forEach(a=>{if(a.email===email)a.name=newName;}));
+  db.tests.forEach(t=>t.results.forEach(r=>{if(r.email===email)r.name=newName;}));
+  saveDB();
+  closeModal();
+  notify(`✓ ${old} → ${newName}`);
+  pgTStudents();
 }
 
 // ══════════════════════════════════════════════════════
