@@ -171,10 +171,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);min-hei
 
 .upzone{border:2px dashed var(--b2);border-radius:var(--r2);padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s2)}
 .upzone:hover,.upzone.drag{border-color:var(--ac2);background:var(--acb)}
-.up-prev{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.up-th{position:relative;border-radius:9px;overflow:hidden;border:2px solid var(--b2)}
-.up-th img{width:80px;height:60px;object-fit:cover;display:block}
-.up-del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.85);color:#fff;border:none;border-radius:4px;width:17px;height:17px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.up-prev{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.up-th{position:relative;border-radius:10px;overflow:hidden;border:2px solid var(--b2);transition:border-color .15s}
+.up-th:hover{border-color:var(--ac2)}
+.up-th img{width:120px;height:90px;object-fit:cover;display:block}
+.up-del{position:absolute;top:5px;right:5px;background:rgba(0,0,0,.88);color:#fff;border:none;border-radius:6px;width:22px;height:22px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.up-del:hover{background:var(--re)}
 
 .qcard{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r2);padding:18px;margin-bottom:12px;position:relative}
 .qnum{font-size:10px;font-weight:700;color:var(--ac2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
@@ -761,7 +763,7 @@ const navDefs={
     {sec:'Моя страница',items:[{id:'s-home',icon:'◈',label:'Главная'},{id:'s-hw',icon:'✎',label:'Задания',badge:()=>db.hw.filter(h=>myHW(h)).length+''},{id:'s-tests',icon:'⊞',label:'Тесты'},{id:'s-materials',icon:'📄',label:'Лекции'},{id:'s-cheatsheets',icon:'⚡',label:'Шпаргалки'}]},
   ],
 };
-function myHW(h){return !h.assignees||!h.assignees.length||h.assignees.includes(session.email);}
+function myHW(h){if(!h.assignees||!h.assignees.length)return false;return h.assignees.includes(session.email);}
 let curPage='';
 function navigate(page){curPage=page;closeSidebar();renderNav();renderPage();}
 function renderNav(){
@@ -777,7 +779,9 @@ function setupBanner(){return CONFIG.emailjsReady?'':`<div class="setup-warn on"
 
 // ══════ DASHBOARD ══════
 function pgDashboard(){
-  const ra=db.hw.flatMap(h=>h.answers.map(a=>({...a,hwTitle:h.title})));
+  const ra=db.hw.flatMap(h=>h.answers.map(a=>({...a,hwTitle:h.title,hwId:h.id,type:'hw'})));
+  const rt=db.tests.flatMap(t=>t.results.map(r=>({...r,testTitle:t.title,testId:t.id,type:'test'})));
+  const allRecent=[...ra,...rt].slice(0,6);
   document.getElementById('main-content').innerHTML=`
   ${setupBanner()}
   <div class="stats">
@@ -788,9 +792,12 @@ function pgDashboard(){
   </div>
   <div class="g2" style="gap:18px">
     <div class="card">
-      <div class="card-h"><div class="card-t">Последние сдачи</div><button class="btn btn-g btn-sm" onclick="navigate('t-hw')">Все →</button></div>
+      <div class="card-h"><div class="card-t">Последние сдачи</div></div>
       <div class="card-b" style="padding:8px 0">
-        ${ra.length?ra.slice(0,4).map(a=>`<div class="srow" style="padding:11px 22px"><div class="sav">${a.name[0]}</div><div style="flex:1;min-width:0"><div class="sname">${a.name}</div><div style="font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.hwTitle}</div></div><div class="smeta">${a.time}</div></div>`).join(''):'<div class="empty"><div class="empty-ic">✉</div><div class="empty-tx">Сдач пока нет</div></div>'}
+        ${allRecent.length?allRecent.map(a=>a.type==='hw'
+          ?`<div class="srow" style="padding:11px 22px"><div class="sav">${a.name[0]}</div><div style="flex:1;min-width:0"><div class="sname">${a.name}</div><div style="font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📝 ${a.hwTitle}</div></div><div class="smeta">${a.time}</div></div>`
+          :`<div class="srow" style="padding:11px 22px"><div class="sav" style="background:rgba(34,211,238,.1);color:var(--gr)">${a.name[0]}</div><div style="flex:1;min-width:0"><div class="sname">${a.name}</div><div style="font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⊞ ${a.testTitle}</div></div><span style="font-size:12px;font-weight:600;color:${a.score/a.total>=.8?'var(--gr)':a.score/a.total>=.6?'var(--am)':'var(--re)'}">${a.score}/${a.total}</span></div>`
+        ).join(''):'<div class="empty"><div class="empty-ic">✉</div><div class="empty-tx">Сдач пока нет</div></div>'}
       </div>
     </div>
     <div class="card">
@@ -1003,7 +1010,7 @@ function pgTTests(){
     db.tests.map(t=>{const avg=t.results.length?Math.round(t.results.reduce((a,r)=>a+r.score/r.total,0)/t.results.length*100):null;
       return`<div class="card"><div class="card-h"><div><div class="card-t">${t.title}</div><span class="tag ${t.subject==='Физика'?'t-am':'t-pu'}" style="margin-top:6px">${t.subject}</span></div><button class="btn btn-ic" onclick="deleteTest(${t.id})">✕</button></div>
       <div class="card-b"><div style="font-size:13px;color:var(--mu);margin-bottom:6px">${t.questions.length} вопр · ${t.results.length} прохожд</div>
-      ${avg!==null?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--mu)">Средний</span><span>${avg}%</span></div><div class="prog"><div class="prog-f" style="width:${avg}%"></div></div><div style="font-size:11px;color:var(--mu);margin-top:6px">${t.results.map(r=>`${r.name}: ${r.score}/${r.total}`).join(' · ')}</div>`:`<div style="font-size:13px;color:var(--mu)">Пока никто</div>`}</div></div>`;
+      ${avg!==null?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--mu)">Средний балл</span><span>${avg}%</span></div><div class="prog"><div class="prog-f" style="width:${avg}%"></div></div><div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">${t.results.map(r=>`<div style="display:flex;align-items:center;gap:8px"><div class="sav" style="background:rgba(124,58,237,.12);color:var(--ac2);font-size:11px">${r.name[0]}</div><span style="flex:1;font-size:12px">${r.name}</span><span style="font-size:12px;color:${r.score/r.total>=.8?'var(--gr)':r.score/r.total>=.6?'var(--am)':'var(--re)'};font-weight:600">${r.score}/${r.total}</span><button class="btn btn-g btn-sm" onclick="viewTestResult(${t.id},'${r.email}')">→</button></div>`).join('')}</div>`:`<div style="font-size:13px;color:var(--mu)">Пока никто не прошёл</div>`}</div></div>`;
     }).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}
   </div>`;
 }
@@ -1047,6 +1054,47 @@ async function saveTest(){
   db.tests.push({id:testId,title:n,subject:document.getElementById('ts').value,assignees,questions:qs,results:[]});
   buildQImgs={};
   closeModal();notify('✓ Тест создан');saveDB();navigate('t-tests');
+}
+async function viewTestResult(testId, email){
+  const t=db.tests.find(x=>x.id===testId);
+  const r=t.results.find(x=>x.email===email);
+  if(!r){notify('Нет данных');return;}
+  // Загружаем фото вопросов
+  const qImgs={};
+  for(let qi=0;qi<t.questions.length;qi++){
+    const img=await PDB.get('qi_'+testId+'_'+qi);
+    if(img) qImgs[qi]=img;
+  }
+  const correct=(Array.isArray(r.ans)?r.ans:[r.ans]);
+  const body=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:14px;background:var(--s2);border-radius:var(--r2)">
+      <div class="sav" style="background:rgba(124,58,237,.15);color:var(--ac2)">${r.name[0]}</div>
+      <div style="flex:1"><div style="font-weight:600">${r.name}</div><div style="font-size:12px;color:var(--mu)">${r.email}</div></div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:${r.score/r.total>=.8?'var(--gr)':r.score/r.total>=.6?'var(--am)':'var(--re)'}">${r.score}/${r.total}</div>
+    </div>
+    ${t.questions.map((q,qi)=>{
+      const correctAns=(Array.isArray(q.ans)?q.ans:[q.ans]);
+      const chosen=(r.details&&r.details[qi])||[];
+      const ok=correctAns.length===chosen.length&&correctAns.slice().sort().every((v,i)=>v===chosen.slice().sort()[i]);
+      return`<div style="margin-bottom:16px;padding:14px;background:var(--s2);border:1px solid ${ok?'rgba(34,211,238,.2)':'rgba(244,63,94,.2)'};border-radius:var(--r2)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;color:var(--mu)">Вопрос ${qi+1}</span>
+          <span class="tag ${ok?'t-gr':'t-re'}">${ok?'✓ Верно':'✕ Ошибка'}</span>
+        </div>
+        <div style="font-size:14px;font-weight:500;margin-bottom:8px;line-height:1.5">${q.text}</div>
+        ${qImgs[qi]?`<img src="${qImgs[qi]}" style="max-width:100%;max-height:180px;border-radius:8px;margin-bottom:8px;object-fit:contain">`:''}
+        ${q.opts.map((o,oi)=>{
+          const isCorrect=correctAns.includes(oi);
+          const isChosen=chosen.includes(oi);
+          let bg='',col='',prefix='';
+          if(isCorrect&&isChosen){bg='rgba(34,211,238,.1)';col='var(--gr)';prefix='✓ ';}
+          else if(isCorrect){bg='rgba(34,211,238,.07)';col='var(--gr)';prefix='✓ ';}
+          else if(isChosen){bg='rgba(244,63,94,.1)';col='var(--re)';prefix='✕ ';}
+          return`<div style="padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:4px;background:${bg||'var(--s1)'};color:${col||'var(--mu)'}${isChosen||isCorrect?';font-weight:500':''}">${prefix}${o}</div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}`;
+  openModal(`Результат: ${r.name} — ${t.title}`, body);
 }
 async function deleteTest(id){
   const t=db.tests.find(x=>x.id===id);
@@ -1332,10 +1380,52 @@ function pgSHW(){
           ${ans&&ans.teacherComment?`<div class="tc-block" style="margin-top:10px"><div class="tc-label">Комментарий учителя</div><div class="tc-text">${ans.teacherComment}</div></div>`:''}
         </div>
         <div class="li-a">
-          ${ans?`<span class="tag t-gr">✓ Сдано</span>${ans.teacherComment?'<span class="tag t-pu" style="margin-top:4px">Проверено</span>':''}`:`<button class="btn btn-p btn-sm" onclick="openSubmit(${h.id})">Сдать</button>`}
+          ${ans?`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="tag t-gr">✓ Сдано</span>${ans.teacherComment?'<span class="tag t-pu">Проверено</span>':''}<button class="btn btn-g btn-sm" style="margin-top:2px" onclick="viewMySubmission(${h.id})">Смотреть</button></div>`:`<button class="btn btn-p btn-sm" onclick="openSubmit(${h.id})">Сдать</button>`}
         </div>
       </div>`;}).join('')||'<div class="empty"><div class="empty-ic">✎</div><div class="empty-tx">Нет заданий</div></div>'}
   </div>`;
+}
+
+// ── Просмотр своей сдачи ──
+async function viewMySubmission(hwId){
+  const h=db.hw.find(x=>x.id===hwId);
+  const ans=h.answers.find(a=>a.email===session.email);
+  if(!ans){notify('Сдача не найдена');return;}
+  openModal('Моя сдача: '+h.title,`<div style="color:var(--mu);font-size:13px;text-align:center;padding:12px">Загрузка...</div>`);
+  const body=document.getElementById('modal-body');
+  if(!body)return;
+  let html='';
+  if(h.teacherNote) html+=`<div class="tnote-block" style="margin-bottom:16px"><div class="tnote-label">📌 Заметка</div><div class="tnote-text">${h.teacherNote}</div></div>`;
+  if(ans.teacherComment) html+=`<div class="tc-block" style="margin-bottom:16px"><div class="tc-label">Комментарий учителя</div><div class="tc-text">${ans.teacherComment}</div></div>`;
+  for(let ti=0;ti<(h.tasks||[]).length;ti++){
+    const task=h.tasks[ti];
+    const taskImg=await PDB.get('ti_'+hwId+'_'+task.id);
+    html+=`<div class="qcard" style="margin-bottom:14px">
+      <div class="qnum">Задание ${ti+1}: ${task.title}</div>
+      ${task.desc?`<div style="font-size:13px;color:var(--mu);margin-bottom:10px;line-height:1.65">${task.desc}</div>`:''}
+      ${taskImg?`<img src="${taskImg}" style="max-width:100%;max-height:240px;border-radius:10px;margin-bottom:10px;object-fit:contain;border:1px solid var(--b2)">`:''}
+      <div id="sub-photos-${task.id}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+    </div>`;
+  }
+  if(ans.comment) html+=`<div class="fg"><div class="fl" style="color:var(--mu);font-size:12px">Твой комментарий</div><div style="font-size:13px;background:var(--b1);border-radius:8px;padding:10px;margin-top:4px">${ans.comment}</div></div>`;
+  body.innerHTML=html;
+  renderMath(body);
+  // Загружаем фото ученика
+  for(const task of (h.tasks||[])){
+    let i=0;
+    const container=document.getElementById('sub-photos-'+task.id);
+    if(!container)continue;
+    while(true){
+      const img=await PDB.get(`p_${hwId}_${session.email}_${task.id}_${i}`);
+      if(!img)break;
+      const el=document.createElement('div');
+      el.className='up-th';
+      el.innerHTML=`<img src="${img}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openModal('Фото','<img src=\\'${img}\\' style=\\'max-width:100%;max-height:80vh;object-fit:contain\\'>')">`;
+      container.appendChild(el);
+      i++;
+    }
+    if(!container.children.length) container.innerHTML=`<div style="font-size:12px;color:var(--mu)">Фото не прикреплено</div>`;
+  }
 }
 
 // ── Сдача ДЗ с фото на каждое задание ──
@@ -1470,7 +1560,10 @@ function checkTest(id){
     });
     if(ok)score++;
   });
-  t.results=t.results.filter(r=>r.email!==session.email);t.results.push({email:session.email,name:session.name,score,total:t.questions.length});saveDB();
+  t.results=t.results.filter(r=>r.email!==session.email);
+  t.results.push({email:session.email,name:session.name,score,total:t.questions.length,
+    details:testSess.answers.map(a=>Array.isArray(a)?[...a]:a!=null?[a]:[])});
+  saveDB();
   const pct=Math.round(score/t.questions.length*100);
   document.getElementById('score-box').innerHTML=`<div style="text-align:center;padding:24px;background:var(--s2);border-radius:14px;margin-top:14px;border:1px solid var(--b1)"><div style="font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:800;color:${pct>=80?'var(--gr)':pct>=60?'var(--am)':'var(--re)'}">${score}/${t.questions.length}</div><div style="font-size:13px;color:var(--mu);margin-top:6px">${pct>=80?'Отлично! 🎉':pct>=60?'Хорошо, есть что повторить':'Разберём на уроке'}</div></div>`;
   document.getElementById('check-btn').style.display='none';
