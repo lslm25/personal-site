@@ -652,7 +652,20 @@ if(CONFIG.emailjsReady) emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
 // ══════════════════════════════════════════════════════
 const db={approvedEmails:['t@t.ru'],pendingEmails:[],students:[{email:'t@t.ru',name:'Тест',grade:''}],hw:[],tests:[],materials:[],cheatsheets:[]};
 const session={role:null,email:null,name:null};
-let buildQs=[], buildTasks=[], taskFiles={}, testSess={};
+let buildQs=[], buildTasks=[], taskFiles={}, testSess={}, buildTaskImgs={}, buildQImgs={};
+
+async function handleTaskImg(taskId,input){
+  const file=input.files[0]; if(!file)return;
+  const c=await compressImg(file,1280,.8); if(!c)return;
+  buildTaskImgs[taskId]=c;
+  document.getElementById('task-list').innerHTML=buildTasks.map(renderTaskCard).join('');
+}
+async function handleQImg(qi,input){
+  const file=input.files[0]; if(!file)return;
+  const c=await compressImg(file,1280,.8); if(!c)return;
+  buildQImgs[qi]=c;
+  document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');
+}
 
 function saveDB(){try{localStorage.setItem('solv_db',JSON.stringify(db));}catch(e){}}
 function loadDB(){try{const s=localStorage.getItem('solv_db');if(s)Object.assign(db,JSON.parse(s));}catch(e){}}
@@ -860,17 +873,22 @@ function saveNote(id,text){const h=db.hw.find(x=>x.id===id);h.teacherNote=text.t
 
 // Конструктор заданий в ДЗ
 function renderTaskCard(task,ti){
+  const imgPrev=buildTaskImgs[task.id]?`<div style="margin:8px 0;display:flex;align-items:flex-start;gap:8px"><img src="${buildTaskImgs[task.id]}" style="max-width:180px;max-height:130px;border-radius:8px;border:2px solid var(--b2);object-fit:cover"><button onclick="delete buildTaskImgs['${task.id}'];document.getElementById('task-list').innerHTML=buildTasks.map(renderTaskCard).join('')" style="padding:3px 8px;background:var(--reb);border:none;border-radius:5px;color:var(--re);cursor:pointer;font-size:11px">✕</button></div>`:'';
   return`<div class="qcard">
     <div class="qnum">Задание ${ti+1} <button class="btn btn-no btn-sm" style="position:absolute;top:14px;right:14px;padding:3px 9px" onclick="removeTask(${ti})">✕</button></div>
     <div class="fg"><input class="fi" placeholder="Название задания" value="${task.title}" oninput="buildTasks[${ti}].title=this.value" style="margin-bottom:8px"></div>
-    <textarea class="ft" placeholder="Описание задания — что нужно решить..." oninput="buildTasks[${ti}].desc=this.value" style="min-height:70px">${task.desc}</textarea>
+    <textarea class="ft" placeholder="Описание (поддерживается LaTeX: $формула$ или $$...$$)" oninput="buildTasks[${ti}].desc=this.value" style="min-height:70px">${task.desc}</textarea>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--s2);border:1px solid var(--b2);border-radius:8px;cursor:pointer;font-size:12px;color:var(--mu)">📷 Иллюстрация<input type="file" accept="image/*" style="display:none" onchange="handleTaskImg('${task.id}',this)"></label>
+      ${imgPrev}
+    </div>
   </div>`;
 }
 function addTask(){buildTasks.push({id:Date.now()+Math.random(),title:'',desc:''});document.getElementById('task-list').innerHTML=buildTasks.map(renderTaskCard).join('');}
-function removeTask(ti){buildTasks.splice(ti,1);document.getElementById('task-list').innerHTML=buildTasks.map(renderTaskCard).join('');}
+function removeTask(ti){const tid=buildTasks[ti]?.id;if(tid)delete buildTaskImgs[tid];buildTasks.splice(ti,1);document.getElementById('task-list').innerHTML=buildTasks.map(renderTaskCard).join('');}
 
 function openCreateHW(){
-  buildTasks=[{id:Date.now(),title:'',desc:''}];
+  buildTasks=[{id:Date.now(),title:'',desc:''}]; buildTaskImgs={};
   const sc=db.students.map(s=>`<label style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--b1);margin-bottom:7px;background:var(--s2)" onmouseover="this.style.borderColor='var(--ac2)'" onmouseout="this.style.borderColor='var(--b1)'"><input type="checkbox" value="${s.email}" id="hw-a-${s.email.replace('@','_')}" style="accent-color:var(--ac2);width:15px;height:15px"><div><div style="font-size:13px;font-weight:500">${s.name}</div><div style="font-size:11px;color:var(--mu)">${s.email}</div></div></label>`).join('');
   openModal('Новое домашнее задание',`
     <div class="fg"><label class="fl">Название</label><input class="fi" id="hw-n" placeholder="Производные — практика"></div>
@@ -888,18 +906,25 @@ function openCreateHW(){
     </div>`);
 }
 function toggleAllHW(v){db.students.forEach(s=>{const el=document.getElementById('hw-a-'+s.email.replace('@','_'));if(el)el.checked=v;});}
-function saveHW(){
+async function saveHW(){
   const n=document.getElementById('hw-n').value.trim();
   if(!n){notify('Введи название');return;}
   const tasks=buildTasks.filter(t=>t.title.trim()||t.desc.trim());
   if(!tasks.length){notify('Добавь хотя бы одно задание');return;}
   const assignees=db.students.map(s=>s.email).filter(e=>{const el=document.getElementById('hw-a-'+e.replace('@','_'));return el&&el.checked;});
-  db.hw.unshift({id:Date.now(),title:n,subject:document.getElementById('hw-s').value,deadline:document.getElementById('hw-d').value||'—',assignees,tasks,answers:[],teacherNote:''});
+  const hwId=Date.now();
+  for(const task of tasks){
+    if(buildTaskImgs[task.id]) await PDB.put('ti_'+hwId+'_'+task.id, buildTaskImgs[task.id]);
+  }
+  db.hw.unshift({id:hwId,title:n,subject:document.getElementById('hw-s').value,deadline:document.getElementById('hw-d').value||'—',assignees,tasks,answers:[],teacherNote:''});
+  buildTaskImgs={};
   closeModal();notify('✓ ДЗ опубликовано');saveDB();navigate('t-hw');
 }
 async function deleteHW(id){
   if(!confirm('Удалить задание и все ответы учеников?'))return;
   await PDB.delHW(id);
+  const hw=db.hw.find(x=>x.id===id);
+  if(hw) for(const t of (hw.tasks||[])) await PDB.del('ti_'+id+'_'+t.id);
   db.hw=db.hw.filter(h=>h.id!==id);saveDB();notify('Удалено');pgTHW();
 }
 
@@ -916,7 +941,9 @@ async function viewAnswers(hwId){
       </div>
       ${(h.tasks||[]).map((task,ti)=>`
         <div style="margin-bottom:14px;padding:12px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2)">
-          <div style="font-size:12px;font-weight:700;color:var(--ac2);margin-bottom:6px">Задание ${ti+1}: ${task.title}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--ac2);margin-bottom:4px">Задание ${ti+1}: ${task.title}</div>
+          ${task.desc?`<div style="font-size:12px;color:var(--mu);margin-bottom:6px;line-height:1.5">${task.desc}</div>`:''}
+          <div id="ti-img-${hwId}-${ai}-${task.id}" style="margin-bottom:6px"></div>
           <div class="task-photos-grid" id="photos-${hwId}-${ai}-${task.id}">
             <div style="font-size:12px;color:var(--mu)">Загрузка фото...</div>
           </div>
@@ -929,10 +956,18 @@ async function viewAnswers(hwId){
       </div>
     </div>`).join('');
   openModal('Ответы: '+h.title, body);
-  // Загружаем фото асинхронно
+  // Загружаем фото асинхронно + иллюстрации заданий
   for(let ai=0;ai<h.answers.length;ai++){
     const a=h.answers[ai];
     for(const task of (h.tasks||[])){
+      // Иллюстрация задания (одна на всех)
+      const tiEl=document.getElementById(`ti-img-${hwId}-${ai}-${task.id}`);
+      if(tiEl&&!tiEl.dataset.loaded){
+        tiEl.dataset.loaded='1';
+        const ti=await PDB.get('ti_'+hwId+'_'+task.id);
+        if(ti) tiEl.innerHTML=`<img src="${ti}" style="max-width:180px;max-height:130px;border-radius:8px;border:2px solid var(--b2);object-fit:cover;cursor:pointer;margin-bottom:6px" onclick="window.open().document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%\\'>')">`;
+      }
+      // Фото ученика
       const count=a.taskUploads?.[task.id]||0;
       const container=document.getElementById(`photos-${hwId}-${ai}-${task.id}`);
       if(!container)continue;
@@ -969,7 +1004,7 @@ function pgTTests(){
     }).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}
   </div>`;
 }
-function openCreateTest(){buildQs=[{text:'',opts:['','','',''],ans:0}];openModal('Создать тест',buildTestForm());}
+function openCreateTest(){buildQs=[{text:'',opts:['','','',''],ans:0}];buildQImgs={};openModal('Создать тест',buildTestForm());}
 function buildTestForm(){
   const sc=db.students.map(s=>`<label style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--b1);margin-bottom:7px;background:var(--s2)" onmouseover="this.style.borderColor='var(--ac2)'" onmouseout="this.style.borderColor='var(--b1)'"><input type="checkbox" value="${s.email}" id="ts-a-${s.email.replace('@','_')}" style="accent-color:var(--ac2);width:15px;height:15px"><div><div style="font-size:13px;font-weight:500">${s.name}</div><div style="font-size:11px;color:var(--mu)">${s.email}</div></div></label>`).join('');
   return`<div class="fg"><label class="fl">Название</label><input class="fi" id="tn" placeholder="Название теста"></div>
@@ -981,17 +1016,34 @@ function buildTestForm(){
     <div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Отмена</button><button class="btn btn-p" onclick="saveTest()">Сохранить</button></div>`;
 }
 function toggleAllTest(v){db.students.forEach(s=>{const el=document.getElementById('ts-a-'+s.email.replace('@','_'));if(el)el.checked=v;});}
-function renderQB(q,qi){return`<div class="qcard"><div class="qnum">Вопрос ${qi+1}</div><input class="fi" style="margin-bottom:10px" placeholder="Текст вопроса" value="${q.text}" oninput="buildQs[${qi}].text=this.value">${q.opts.map((o,oi)=>`<div class="opt-row"><div class="opt-dot ${q.ans===oi?'ok':''}" onclick="setAns(${qi},${oi})"></div><input class="opt-inp" placeholder="Вариант ${oi+1}" value="${o}" oninput="buildQs[${qi}].opts[${oi}]=this.value"></div>`).join('')}<div style="font-size:11px;color:var(--mu);margin-top:4px">Нажми кружок — верный ответ</div></div>`;}
+function renderQB(q,qi){
+  const imgPrev=buildQImgs[qi]?`<div style="margin:8px 0;display:flex;align-items:flex-start;gap:8px"><img src="${buildQImgs[qi]}" style="max-width:180px;max-height:130px;border-radius:8px;border:2px solid var(--b2);object-fit:cover"><button onclick="delete buildQImgs[${qi}];document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('')" style="padding:3px 8px;background:var(--reb);border:none;border-radius:5px;color:var(--re);cursor:pointer;font-size:11px">✕</button></div>`:'';
+  return`<div class="qcard"><div class="qnum">Вопрос ${qi+1}</div>
+    <input class="fi" style="margin-bottom:8px" placeholder="Текст вопроса (поддерживается LaTeX: $...$)" value="${q.text}" oninput="buildQs[${qi}].text=this.value">
+    ${imgPrev}
+    <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--s2);border:1px solid var(--b2);border-radius:8px;cursor:pointer;font-size:12px;color:var(--mu);margin-bottom:10px">📷 Фото к вопросу<input type="file" accept="image/*" style="display:none" onchange="handleQImg(${qi},this)"></label>
+    ${q.opts.map((o,oi)=>`<div class="opt-row"><div class="opt-dot ${q.ans===oi?'ok':''}" onclick="setAns(${qi},${oi})"></div><input class="opt-inp" placeholder="Вариант ${oi+1}" value="${o}" oninput="buildQs[${qi}].opts[${oi}]=this.value"></div>`).join('')}
+    <div style="font-size:11px;color:var(--mu);margin-top:4px">Нажми кружок — верный ответ</div></div>`;
+}
 function setAns(qi,oi){buildQs[qi].ans=oi;document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');}
 function addQ(){buildQs.push({text:'',opts:['','','',''],ans:0});document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');}
-function saveTest(){
+async function saveTest(){
   const n=document.getElementById('tn').value.trim();if(!n){notify('Введи название');return;}
   const qs=buildQs.filter(q=>q.text.trim()&&q.opts.filter(o=>o.trim()).length>=2);if(!qs.length){notify('Добавь вопросы');return;}
   const assignees=db.students.map(s=>s.email).filter(e=>{const el=document.getElementById('ts-a-'+e.replace('@','_'));return el&&el.checked;});
-  db.tests.push({id:Date.now(),title:n,subject:document.getElementById('ts').value,assignees,questions:qs,results:[]});
+  const testId=Date.now();
+  for(let qi=0;qi<buildQs.length;qi++){
+    if(buildQImgs[qi]) await PDB.put('qi_'+testId+'_'+qi, buildQImgs[qi]);
+  }
+  db.tests.push({id:testId,title:n,subject:document.getElementById('ts').value,assignees,questions:qs,results:[]});
+  buildQImgs={};
   closeModal();notify('✓ Тест создан');saveDB();navigate('t-tests');
 }
-function deleteTest(id){db.tests=db.tests.filter(t=>t.id!==id);saveDB();notify('Удалено');pgTTests();}
+async function deleteTest(id){
+  const t=db.tests.find(x=>x.id===id);
+  if(t) for(let qi=0;qi<t.questions.length;qi++) await PDB.del('qi_'+id+'_'+qi);
+  db.tests=db.tests.filter(t=>t.id!==id);saveDB();notify('Удалено');pgTTests();
+}
 
 // ══════ ЛЕКЦИИ (учитель) ══════
 function pgTMaterials(){
@@ -1278,14 +1330,21 @@ function pgSHW(){
 }
 
 // ── Сдача ДЗ с фото на каждое задание ──
-function openSubmit(hwId){
+async function openSubmit(hwId){
   const h=db.hw.find(x=>x.id===hwId);
   taskFiles={};
   (h.tasks||[]).forEach(t=>taskFiles[t.id]=[]);
+  // Предзагружаем иллюстрации заданий
+  const taskImgs={};
+  for(const task of (h.tasks||[])){
+    const img=await PDB.get('ti_'+hwId+'_'+task.id);
+    if(img) taskImgs[task.id]=img;
+  }
   const taskForms=(h.tasks||[]).map((task,ti)=>`
     <div class="qcard">
       <div class="qnum">Задание ${ti+1}: ${task.title}</div>
-      ${task.desc?`<div style="font-size:13px;color:var(--mu);margin-bottom:12px;line-height:1.6">${task.desc}</div>`:''}
+      ${task.desc?`<div style="font-size:13px;color:var(--mu);margin-bottom:10px;line-height:1.65">${task.desc}</div>`:''}
+      ${taskImgs[task.id]?`<img src="${taskImgs[task.id]}" style="max-width:100%;max-height:280px;border-radius:10px;margin-bottom:12px;object-fit:contain;border:1px solid var(--b2)">`:''}
       <div class="upzone" id="uz-${task.id}" onclick="trigUpTask(${JSON.stringify(task.id)})" ondragover="dov(event,'${task.id}')" ondrop="dof(event,'${task.id}')">
         <div style="font-size:22px;margin-bottom:6px">📷</div>
         <div style="font-size:13px;color:var(--mu)">Фото решения задания ${ti+1}</div>
@@ -1353,8 +1412,29 @@ function pgSTests(){
   const my=db.tests.filter(t=>myHW(t));
   document.getElementById('main-content').innerHTML=`<div class="g2" style="gap:14px">${my.map(t=>{const done=t.results.find(r=>r.email===session.email);return`<div class="card"><div class="card-h"><div><div class="card-t">${t.title}</div><span class="tag ${t.subject==='Физика'?'t-am':'t-pu'}" style="margin-top:6px">${t.subject}</span></div>${done?`<span class="tag t-gr">${done.score}/${done.total}</span>`:''}</div><div class="card-b"><div style="font-size:13px;color:var(--mu);margin-bottom:14px">${t.questions.length} вопросов</div><button class="btn btn-p" style="width:100%" onclick="startTest(${t.id})">${done?'Пройти снова':'Начать →'}</button></div></div>`;}).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}</div>`;
 }
-function startTest(id){testSess={id,answers:[],done:false};const t=db.tests.find(x=>x.id===id);openModal(t.title,renderTestUI(t));}
-function renderTestUI(t){return`${t.questions.map((q,qi)=>`<div style="margin-bottom:22px"><div style="font-size:15px;font-weight:500;margin-bottom:12px;line-height:1.55">${qi+1}. ${q.text}</div>${q.opts.map((o,oi)=>`<div class="topt" id="to-${qi}-${oi}" onclick="pickOpt(${qi},${oi},${t.id})"><div class="topt-radio"></div>${o}</div>`).join('')}</div>`).join('')}<div id="score-box"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px"><button class="btn btn-g" onclick="closeModal()">Закрыть</button><button class="btn btn-p" id="check-btn" onclick="checkTest(${t.id})">Проверить</button></div>`;}
+async function startTest(id){
+  testSess={id,answers:[],done:false};
+  const t=db.tests.find(x=>x.id===id);
+  const qImgs={};
+  for(let qi=0;qi<t.questions.length;qi++){
+    const img=await PDB.get('qi_'+id+'_'+qi);
+    if(img) qImgs[qi]=img;
+  }
+  openModal(t.title,renderTestUI(t,qImgs));
+}
+function renderTestUI(t,qImgs={}){
+  return`${t.questions.map((q,qi)=>`
+    <div style="margin-bottom:22px">
+      <div style="font-size:15px;font-weight:500;margin-bottom:10px;line-height:1.55">${qi+1}. ${q.text}</div>
+      ${qImgs[qi]?`<img src="${qImgs[qi]}" style="max-width:100%;max-height:280px;border-radius:10px;margin-bottom:12px;object-fit:contain;border:1px solid var(--b2)">`:''}
+      ${q.opts.map((o,oi)=>`<div class="topt" id="to-${qi}-${oi}" onclick="pickOpt(${qi},${oi},${t.id})"><div class="topt-radio"></div>${o}</div>`).join('')}
+    </div>`).join('')}
+  <div id="score-box"></div>
+  <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+    <button class="btn btn-g" onclick="closeModal()">Закрыть</button>
+    <button class="btn btn-p" id="check-btn" onclick="checkTest(${t.id})">Проверить</button>
+  </div>`;
+}
 function pickOpt(qi,oi,tid){if(testSess.done)return;testSess.answers[qi]=oi;const t=db.tests.find(x=>x.id===tid);t.questions.forEach((_,i)=>t.questions[i].opts.forEach((_,j)=>{const el=document.getElementById(`to-${i}-${j}`);if(el)el.classList.toggle('selected',i===qi&&j===oi);}));}
 function checkTest(id){
   if(testSess.done)return;testSess.done=true;
