@@ -1026,6 +1026,13 @@ function buildTestForm(){
     <div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Отмена</button><button class="btn btn-p" onclick="saveTest()">Сохранить</button></div>`;
 }
 function toggleAllTest(v){db.students.forEach(s=>{const el=document.getElementById('ts-a-'+s.email.replace('@','_'));if(el)el.checked=v;});}
+function assigneePicker(pfx,existing=[]){
+  if(!db.students.length) return '';
+  const sc=db.students.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer"><input type="checkbox" id="${pfx}-a-${s.email.replace('@','_')}" ${existing.includes(s.email)?'checked':''}><span style="font-size:13px">${s.name} <span style="color:var(--mu);font-size:11px">${s.email}</span></span></label>`).join('');
+  return `<div class="fg"><label class="fl">Ученики</label><div style="margin-bottom:8px;display:flex;gap:8px"><button type="button" class="btn btn-g btn-sm" onclick="toggleAssignees('${pfx}',true)">Все</button><button type="button" class="btn btn-g btn-sm" onclick="toggleAssignees('${pfx}',false)">Никто</button></div>${sc}</div>`;
+}
+function toggleAssignees(pfx,v){db.students.forEach(s=>{const el=document.getElementById(pfx+'-a-'+s.email.replace('@','_'));if(el)el.checked=v;});}
+function getAssignees(pfx){return db.students.map(s=>s.email).filter(e=>{const el=document.getElementById(pfx+'-a-'+e.replace('@','_'));return el&&el.checked;});}
 function renderQB(q,qi){
   const ans=Array.isArray(q.ans)?q.ans:(q.ans!=null?[q.ans]:[]);
   const imgPrev=buildQImgs[qi]?`<div style="margin:8px 0;display:flex;align-items:flex-start;gap:8px"><img src="${buildQImgs[qi]}" style="max-width:180px;max-height:130px;border-radius:8px;border:2px solid var(--b2);object-fit:cover"><button onclick="delete buildQImgs[${qi}];document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('')" style="padding:3px 8px;background:var(--reb);border:none;border-radius:5px;color:var(--re);cursor:pointer;font-size:11px">✕</button></div>`:'';
@@ -1138,6 +1145,7 @@ function openCreateMaterial(){
       </div>
       <input type="file" id="mpdf-inp" accept=".pdf" style="display:none" onchange="mPdfFile=this.files[0];document.getElementById('mpdf-name').textContent=this.files[0]?.name||''">
     </div>
+    ${assigneePicker('mm')}
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveMaterial()">Опубликовать</button>
@@ -1162,6 +1170,7 @@ function openEditMaterial(id){
       </div>
       <input type="file" id="mpdf-inp" accept=".pdf" style="display:none" onchange="mPdfFile=this.files[0];document.getElementById('mpdf-name').textContent=this.files[0]?.name||''">
     </div>
+    ${assigneePicker('mm',m.assignees||[])}
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveMaterial(${id})">Сохранить</button>
@@ -1171,27 +1180,28 @@ async function saveMaterial(editId){
   const n=document.getElementById('mn').value.trim();
   if(!n){notify('Введи название');return;}
   const subj=document.getElementById('ms').value;
+  const assignees=getAssignees('mm');
   if(mMode==='text'){
     const content=document.getElementById('mc').value.trim();
     if(!content){notify('Введи текст лекции');return;}
     if(editId){
       const m=db.materials.find(x=>x.id===editId);
       if(m.hasPDF) await PDB.del('pdf_m_'+editId);
-      Object.assign(m,{title:n,subject:subj,content,hasPDF:false});
+      Object.assign(m,{title:n,subject:subj,content,hasPDF:false,assignees});
     } else {
-      db.materials.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,date:new Date().toLocaleDateString('ru')});
+      db.materials.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,assignees,date:new Date().toLocaleDateString('ru')});
     }
   } else {
     if(!mPdfFile&&!(editId&&db.materials.find(x=>x.id===editId)?.hasPDF)){notify('Загрузи PDF файл');return;}
     if(editId){
       const m=db.materials.find(x=>x.id===editId);
       if(mPdfFile){const b64=await readFileAsB64(mPdfFile);await PDB.put('pdf_m_'+editId,b64);}
-      Object.assign(m,{title:n,subject:subj,content:'',hasPDF:true});
+      Object.assign(m,{title:n,subject:subj,content:'',hasPDF:true,assignees});
     } else {
       const id=Date.now();
       const b64=await readFileAsB64(mPdfFile);
       await PDB.put('pdf_m_'+id,b64);
-      db.materials.unshift({id,title:n,subject:subj,content:'',hasPDF:true,date:new Date().toLocaleDateString('ru')});
+      db.materials.unshift({id,title:n,subject:subj,content:'',hasPDF:true,assignees,date:new Date().toLocaleDateString('ru')});
     }
   }
   mPdfFile=null; saveDB(); closeModal();
@@ -1257,6 +1267,7 @@ function openCreateCheatsheet(){
       </div>
       <input type="file" id="cspdf-inp" accept=".pdf" style="display:none" onchange="csPdfFile=this.files[0];document.getElementById('cspdf-name').textContent=this.files[0]?.name||''">
     </div>
+    ${assigneePicker('cs2')}
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveCheatsheet()">Опубликовать</button>
@@ -1281,6 +1292,7 @@ function openEditCheatsheet(id){
       </div>
       <input type="file" id="cspdf-inp" accept=".pdf" style="display:none" onchange="csPdfFile=this.files[0];document.getElementById('cspdf-name').textContent=this.files[0]?.name||''">
     </div>
+    ${assigneePicker('cs2',c.assignees||[])}
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveCheatsheet(${id})">Сохранить</button>
@@ -1290,27 +1302,28 @@ async function saveCheatsheet(editId){
   const n=document.getElementById('cn').value.trim();
   if(!n){notify('Введи название');return;}
   const subj=document.getElementById('cs-subj').value;
+  const assignees=getAssignees('cs2');
   if(csMode==='text'){
     const content=document.getElementById('cc').value.trim();
     if(!content){notify('Введи содержание');return;}
     if(editId){
       const c=db.cheatsheets.find(x=>x.id===editId);
       if(c.hasPDF) await PDB.del('pdf_cs_'+editId);
-      Object.assign(c,{title:n,subject:subj,content,hasPDF:false});
+      Object.assign(c,{title:n,subject:subj,content,hasPDF:false,assignees});
     } else {
-      db.cheatsheets.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,date:new Date().toLocaleDateString('ru')});
+      db.cheatsheets.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,assignees,date:new Date().toLocaleDateString('ru')});
     }
   } else {
     if(!csPdfFile&&!(editId&&db.cheatsheets.find(x=>x.id===editId)?.hasPDF)){notify('Загрузи PDF файл');return;}
     if(editId){
       const c=db.cheatsheets.find(x=>x.id===editId);
       if(csPdfFile){const b64=await readFileAsB64(csPdfFile);await PDB.put('pdf_cs_'+editId,b64);}
-      Object.assign(c,{title:n,subject:subj,content:'',hasPDF:true});
+      Object.assign(c,{title:n,subject:subj,content:'',hasPDF:true,assignees});
     } else {
       const id=Date.now();
       const b64=await readFileAsB64(csPdfFile);
       await PDB.put('pdf_cs_'+id,b64);
-      db.cheatsheets.unshift({id,title:n,subject:subj,content:'',hasPDF:true,date:new Date().toLocaleDateString('ru')});
+      db.cheatsheets.unshift({id,title:n,subject:subj,content:'',hasPDF:true,assignees,date:new Date().toLocaleDateString('ru')});
     }
   }
   csPdfFile=null; saveDB(); closeModal();
@@ -1631,7 +1644,7 @@ function checkTest(id){
 
 // ══════ ЛЕКЦИИ (ученик) ══════
 function pgSMaterials(){
-  const list=db.materials;
+  const list=db.materials.filter(m=>myHW(m));
   document.getElementById('main-content').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${
     list.map(m=>`
       <div class="li" onclick="viewMaterialStudent(${m.id})" style="cursor:pointer">
@@ -1648,7 +1661,7 @@ function viewMaterialStudent(id){ viewMaterialModal(id); }
 
 // ══════ ШПАРГАЛКИ (ученик) ══════
 function pgSCheatsheets(){
-  const list=db.cheatsheets;
+  const list=db.cheatsheets.filter(c=>myHW(c));
   document.getElementById('main-content').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${
     list.map(c=>`
       <div class="card" style="cursor:pointer" onclick="viewCheatsheet(${c.id})">
