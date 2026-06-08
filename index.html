@@ -598,7 +598,7 @@ if(CONFIG.emailjsReady) emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
 // ══════════════════════════════════════════════════════
 // DB
 // ══════════════════════════════════════════════════════
-const db={approvedEmails:[],pendingEmails:[],students:[],hw:[],tests:[],materials:[],cheatsheets:[]};
+const db={approvedEmails:['t@t.ru'],pendingEmails:[],students:[{email:'t@t.ru',name:'Тест',grade:''}],hw:[],tests:[],materials:[],cheatsheets:[]};
 const session={role:null,email:null,name:null};
 let buildQs=[], buildTasks=[], taskFiles={}, testSess={};
 
