@@ -775,7 +775,7 @@ function renderNav(){
 const titles={dashboard:'Панель учителя','t-hw':'Домашние задания','t-tests':'Тесты','t-materials':'Лекции','t-cheatsheets':'Шпаргалки','t-students':'Ученики','t-access':'Заявки на доступ','s-home':'Моя страница','s-hw':'Задания','s-tests':'Тесты','s-materials':'Лекции','s-cheatsheets':'Шпаргалки'};
 const pageMap={dashboard:pgDashboard,'t-hw':pgTHW,'t-tests':pgTTests,'t-materials':pgTMaterials,'t-cheatsheets':pgTCheatsheets,'t-students':pgTStudents,'t-access':pgTAccess,'s-home':pgSHome,'s-hw':pgSHW,'s-tests':pgSTests,'s-materials':pgSMaterials,'s-cheatsheets':pgSCheatsheets};
 function renderPage(){document.getElementById('topbar-title').textContent=titles[curPage]||'';document.getElementById('topbar-actions').innerHTML='';const fn=pageMap[curPage];if(fn)fn();setTimeout(()=>renderMath(document.getElementById('main-content')),100);}
-function setupBanner(){return CONFIG.emailjsReady?'':`<div class="setup-warn on">⚠️ EmailJS не настроен — письма не отправляются. Заявки видны в разделе «Заявки».</div>`;}
+function setupBanner(){return '';}
 
 // ══════ DASHBOARD ══════
 function pgDashboard(){
