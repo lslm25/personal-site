@@ -1509,7 +1509,67 @@ async function doSubmit(hwId){
 // ══════ TESTS (ученик) ══════
 function pgSTests(){
   const my=db.tests.filter(t=>myHW(t));
-  document.getElementById('main-content').innerHTML=`<div class="g2" style="gap:14px">${my.map(t=>{const done=t.results.find(r=>r.email===session.email);return`<div class="card"><div class="card-h"><div><div class="card-t">${t.title}</div><span class="tag ${t.subject==='Физика'?'t-am':'t-pu'}" style="margin-top:6px">${t.subject}</span></div>${done?`<span class="tag t-gr">${done.score}/${done.total}</span>`:''}</div><div class="card-b"><div style="font-size:13px;color:var(--mu);margin-bottom:14px">${t.questions.length} вопросов</div><button class="btn btn-p" style="width:100%" onclick="startTest(${t.id})">${done?'Пройти снова':'Начать →'}</button></div></div>`;}).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}</div>`;
+  document.getElementById('main-content').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${my.map(t=>{
+    const done=t.results.find(r=>r.email===session.email);
+    const pct=done?Math.round(done.score/done.total*100):null;
+    const col=pct!=null?(pct>=80?'var(--gr)':pct>=60?'var(--am)':'var(--re)'):'';
+    return`<div class="li" style="cursor:default">
+      <div class="li-ic" style="background:${t.subject==='Физика'?'rgba(245,158,11,.12)':'rgba(124,58,237,.12)'};color:${t.subject==='Физика'?'var(--am)':'var(--ac2)'}">⊞</div>
+      <div class="li-b">
+        <div class="li-t">${t.title}</div>
+        <div class="li-m">${t.subject} · ${t.questions.length} вопросов</div>
+      </div>
+      <div class="li-a">
+        ${done
+          ?`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+              <span class="tag t-gr" style="font-weight:700;color:${col}">${done.score}/${done.total} (${pct}%)</span>
+              <button class="btn btn-g btn-sm" onclick="viewMyTestResult(${t.id})">Результат</button>
+              <button class="btn btn-p btn-sm" onclick="startTest(${t.id})">Снова</button>
+            </div>`
+          :`<button class="btn btn-p btn-sm" onclick="startTest(${t.id})">Начать →</button>`
+        }
+      </div>
+    </div>`;
+  }).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}</div>`;
+}
+async function viewMyTestResult(testId){
+  const t=db.tests.find(x=>x.id===testId);
+  const r=t.results.find(x=>x.email===session.email);
+  if(!r){notify('Результат не найден');return;}
+  const pct=Math.round(r.score/r.total*100);
+  const col=pct>=80?'var(--gr)':pct>=60?'var(--am)':'var(--re)';
+  openModal(t.title,`<div style="text-align:center;color:var(--mu);font-size:13px">Загрузка...</div>`);
+  const body=document.getElementById('modal-body');
+  if(!body)return;
+  const qImgs={};
+  for(let qi=0;qi<t.questions.length;qi++){
+    const img=await PDB.get('qi_'+testId+'_'+qi);
+    if(img) qImgs[qi]=img;
+  }
+  let html=`<div style="text-align:center;margin-bottom:20px;padding:16px;background:var(--b1);border-radius:12px">
+    <div style="font-size:32px;font-weight:800;color:${col}">${r.score}/${r.total}</div>
+    <div style="font-size:14px;color:var(--mu);margin-top:4px">${pct}% — ${pct>=80?'Отлично!':pct>=60?'Хорошо':'Нужно повторить'}</div>
+  </div>`;
+  t.questions.forEach((q,qi)=>{
+    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).slice().sort((a,b)=>a-b);
+    const chosen=(r.details&&r.details[qi]?r.details[qi]:[]).slice().sort((a,b)=>a-b);
+    const ok=correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
+    html+=`<div class="qcard" style="margin-bottom:12px;border-left:3px solid ${ok?'var(--gr)':'var(--re)'}">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.55">${qi+1}. ${q.text}</div>
+      ${qImgs[qi]?`<img src="${qImgs[qi]}" style="max-width:100%;max-height:200px;border-radius:8px;margin-bottom:10px;object-fit:contain;border:1px solid var(--b2)">`:''}
+      ${q.opts.map((o,oi)=>{
+        const isCorrect=correct.includes(oi);
+        const isChosen=chosen.includes(oi);
+        let bg='',tx='',prefix='';
+        if(isCorrect&&isChosen){bg='rgba(34,197,94,.12)';tx='var(--gr)';prefix='✓ ';}
+        else if(isCorrect){bg='rgba(34,197,94,.08)';tx='var(--gr)';prefix='✓ ';}
+        else if(isChosen){bg='rgba(239,68,68,.12)';tx='var(--re)';prefix='✗ ';}
+        return`<div style="padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:6px;background:${bg||'var(--b1)'};color:${tx||'var(--tx)'}">${prefix}${o}</div>`;
+      }).join('')}
+    </div>`;
+  });
+  body.innerHTML=html;
+  renderMath(body);
 }
 async function startTest(id){
   testSess={id,answers:[],done:false};
