@@ -1508,7 +1508,8 @@ async function doSubmit(hwId){
 
 // ══════ TESTS (ученик) ══════
 function pgSTests(){
-  const my=db.tests.filter(t=>myHW(t));
+  // Показываем тесты где студент назначен ИЛИ уже прошёл (чтобы не терялись после прохождения)
+  const my=db.tests.filter(t=>myHW(t)||t.results.some(r=>r.email===session.email));
   document.getElementById('main-content').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${my.map(t=>{
     const done=t.results.find(r=>r.email===session.email);
     const pct=done?Math.round(done.score/done.total*100):null;
@@ -1524,7 +1525,6 @@ function pgSTests(){
           ?`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
               <span class="tag t-gr" style="font-weight:700;color:${col}">${done.score}/${done.total} (${pct}%)</span>
               <button class="btn btn-g btn-sm" onclick="viewMyTestResult(${t.id})">Результат</button>
-              <button class="btn btn-p btn-sm" onclick="startTest(${t.id})">Снова</button>
             </div>`
           :`<button class="btn btn-p btn-sm" onclick="startTest(${t.id})">Начать →</button>`
         }
