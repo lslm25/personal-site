@@ -6,6 +6,9 @@
 <title>Solv</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="window._katexReady=true"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -562,6 +565,55 @@ const PDB = {
   }
 };
 
+// ══════ LaTeX / KaTeX рендер ══════
+function renderMath(el){
+  if(!el) return;
+  if(typeof renderMathInElement!=='undefined'){
+    renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false});
+  } else {
+    setTimeout(()=>renderMath(el),200);
+  }
+}
+
+// ══════ PDF helpers ══════
+async function readFileAsB64(file){
+  return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);});
+}
+async function getPDFUrl(key){
+  const b64=await PDB.get(key);
+  if(!b64) return null;
+  try{const res=await fetch(b64);const blob=await res.blob();return URL.createObjectURL(blob);}catch{return null;}
+}
+
+// PDF/text mode state
+let mMode='text', csMode='text', mPdfFile=null, csPdfFile=null;
+function setMMode(m){
+  mMode=m;
+  ['text','pdf'].forEach(v=>{
+    const b=document.getElementById('mm-btn-'+v);
+    if(b){b.style.background=m===v?'var(--ac)':'var(--s2)';b.style.color=m===v?'#fff':'var(--mu)';}
+  });
+  const ta=document.getElementById('mm-text-area'),pa=document.getElementById('mm-pdf-area');
+  if(ta)ta.style.display=m==='text'?'':'none';
+  if(pa)pa.style.display=m==='pdf'?'':'none';
+}
+function setCsMode(m){
+  csMode=m;
+  ['text','pdf'].forEach(v=>{
+    const b=document.getElementById('cs-btn-'+v);
+    if(b){b.style.background=m===v?'var(--ac)':'var(--s2)';b.style.color=m===v?'#fff':'var(--mu)';}
+  });
+  const ta=document.getElementById('cs-text-area'),pa=document.getElementById('cs-pdf-area');
+  if(ta)ta.style.display=m==='text'?'':'none';
+  if(pa)pa.style.display=m==='pdf'?'':'none';
+}
+function modePicker(prefix,current){
+  return`<div style="display:flex;border:1px solid var(--b2);border-radius:var(--r2);overflow:hidden;margin-bottom:16px">
+    <button id="${prefix}-btn-text" onclick="set${prefix==='mm'?'M':'Cs'}Mode('text')" style="flex:1;padding:9px;border:none;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;background:${current==='text'?'var(--ac)':'var(--s2)'};color:${current==='text'?'#fff':'var(--mu)'};transition:all .15s">📝 Текст</button>
+    <button id="${prefix}-btn-pdf" onclick="set${prefix==='mm'?'M':'Cs'}Mode('pdf')" style="flex:1;padding:9px;border:none;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;background:${current==='pdf'?'var(--ac)':'var(--s2)'};color:${current==='pdf'?'#fff':'var(--mu)'};transition:all .15s">📎 PDF файл</button>
+  </div>`;
+}
+
 // Сжатие фото
 async function compressImg(file,maxW=1280,q=0.72){
   return new Promise(res=>{
@@ -704,7 +756,7 @@ function renderNav(){
 }
 const titles={dashboard:'Панель учителя','t-hw':'Домашние задания','t-tests':'Тесты','t-materials':'Лекции','t-cheatsheets':'Шпаргалки','t-students':'Ученики','t-access':'Заявки на доступ','s-home':'Моя страница','s-hw':'Задания','s-tests':'Тесты','s-materials':'Лекции','s-cheatsheets':'Шпаргалки'};
 const pageMap={dashboard:pgDashboard,'t-hw':pgTHW,'t-tests':pgTTests,'t-materials':pgTMaterials,'t-cheatsheets':pgTCheatsheets,'t-students':pgTStudents,'t-access':pgTAccess,'s-home':pgSHome,'s-hw':pgSHW,'s-tests':pgSTests,'s-materials':pgSMaterials,'s-cheatsheets':pgSCheatsheets};
-function renderPage(){document.getElementById('topbar-title').textContent=titles[curPage]||'';document.getElementById('topbar-actions').innerHTML='';const fn=pageMap[curPage];if(fn)fn();}
+function renderPage(){document.getElementById('topbar-title').textContent=titles[curPage]||'';document.getElementById('topbar-actions').innerHTML='';const fn=pageMap[curPage];if(fn)fn();setTimeout(()=>renderMath(document.getElementById('main-content')),100);}
 function setupBanner(){return CONFIG.emailjsReady?'':`<div class="setup-warn on">⚠️ EmailJS не настроен — письма не отправляются. Заявки видны в разделе «Заявки».</div>`;}
 
 // ══════ DASHBOARD ══════
@@ -950,51 +1002,111 @@ function pgTMaterials(){
         <div class="li-ic" style="background:${m.subject==='Физика'?'rgba(245,158,11,.12)':'rgba(124,58,237,.12)'};color:${m.subject==='Физика'?'var(--am)':'var(--ac2)'}">${m.subject==='Физика'?'Ф':'М'}</div>
         <div class="li-b">
           <div class="li-t">${m.title}</div>
-          <div class="li-m">${m.subject} · ${m.date}</div>
+          <div class="li-m">${m.subject} · ${m.date} ${m.hasPDF?'· <span class="tag t-mu">PDF</span>':''}</div>
         </div>
         <div class="li-a" style="flex-direction:row;align-items:center;gap:6px">
-          <button class="btn btn-g btn-sm" onclick="openEditMaterial(${m.id})">✎ Ред.</button>
+          <button class="btn btn-g btn-sm" onclick="viewMaterialModal(${m.id})">Открыть</button>
+          <button class="btn btn-g btn-sm" onclick="openEditMaterial(${m.id})">✎</button>
           <button class="btn btn-ic btn-sm" onclick="deleteMaterial(${m.id})">✕</button>
         </div>
       </div>`).join('')||'<div class="empty"><div class="empty-ic">📄</div><div class="empty-tx">Нет лекций</div></div>'}
   </div>`;
 }
 function openCreateMaterial(){
+  mMode='text'; mPdfFile=null;
   openModal('Новая лекция',`
     <div class="fg"><label class="fl">Название</label><input class="fi" id="mn" placeholder="Производная функции — основы"></div>
     <div class="fg"><label class="fl">Предмет</label><select class="fs" id="ms"><option>Математика</option><option>Физика</option></select></div>
-    <div class="fg"><label class="fl">Текст лекции</label><textarea class="ft" id="mc" style="min-height:260px" placeholder="Введите текст лекции..."></textarea></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px">
+    ${modePicker('mm','text')}
+    <div id="mm-text-area">
+      <div class="fg"><label class="fl">Текст лекции (поддерживается LaTeX: $формула$)</label><textarea class="ft" id="mc" style="min-height:220px" placeholder="Текст лекции...&#10;&#10;LaTeX: $E = mc^2$ или $$\\int_0^\\infty f(x)dx$$"></textarea></div>
+    </div>
+    <div id="mm-pdf-area" style="display:none">
+      <div class="upzone" onclick="document.getElementById('mpdf-inp').click()">
+        <div style="font-size:28px;margin-bottom:6px">📎</div>
+        <div style="font-size:13px;color:var(--mu)">Нажми чтобы выбрать PDF</div>
+        <div id="mpdf-name" style="font-size:12px;color:var(--ac2);margin-top:6px"></div>
+      </div>
+      <input type="file" id="mpdf-inp" accept=".pdf" style="display:none" onchange="mPdfFile=this.files[0];document.getElementById('mpdf-name').textContent=this.files[0]?.name||''">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveMaterial()">Опубликовать</button>
     </div>`);
 }
 function openEditMaterial(id){
   const m=db.materials.find(x=>x.id===id);
+  mMode=m.hasPDF?'pdf':'text'; mPdfFile=null;
   openModal('Редактировать лекцию',`
     <div class="fg"><label class="fl">Название</label><input class="fi" id="mn" value="${m.title.replace(/"/g,'&quot;')}"></div>
     <div class="fg"><label class="fl">Предмет</label><select class="fs" id="ms"><option ${m.subject==='Математика'?'selected':''}>Математика</option><option ${m.subject==='Физика'?'selected':''}>Физика</option></select></div>
-    <div class="fg"><label class="fl">Текст лекции</label><textarea class="ft" id="mc" style="min-height:260px">${m.content}</textarea></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px">
+    ${modePicker('mm',mMode)}
+    <div id="mm-text-area" style="${mMode==='pdf'?'display:none':''}">
+      <div class="fg"><label class="fl">Текст лекции (поддерживается LaTeX)</label><textarea class="ft" id="mc" style="min-height:220px">${m.content||''}</textarea></div>
+    </div>
+    <div id="mm-pdf-area" style="${mMode==='text'?'display:none':''}">
+      ${m.hasPDF?`<div style="padding:12px;background:var(--s2);border-radius:var(--r2);margin-bottom:10px;font-size:13px;color:var(--gr)">✓ PDF загружен. Загрузи новый чтобы заменить.</div>`:''}
+      <div class="upzone" onclick="document.getElementById('mpdf-inp').click()">
+        <div style="font-size:28px;margin-bottom:6px">📎</div>
+        <div style="font-size:13px;color:var(--mu)">${m.hasPDF?'Заменить PDF':'Выбрать PDF'}</div>
+        <div id="mpdf-name" style="font-size:12px;color:var(--ac2);margin-top:6px"></div>
+      </div>
+      <input type="file" id="mpdf-inp" accept=".pdf" style="display:none" onchange="mPdfFile=this.files[0];document.getElementById('mpdf-name').textContent=this.files[0]?.name||''">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveMaterial(${id})">Сохранить</button>
     </div>`);
 }
-function saveMaterial(editId){
+async function saveMaterial(editId){
   const n=document.getElementById('mn').value.trim();
   if(!n){notify('Введи название');return;}
-  const content=document.getElementById('mc').value.trim();
-  if(!content){notify('Введи текст лекции');return;}
-  if(editId){
-    const m=db.materials.find(x=>x.id===editId);
-    m.title=n; m.subject=document.getElementById('ms').value; m.content=content;
-    saveDB(); closeModal(); notify('✓ Лекция обновлена'); pgTMaterials();
+  const subj=document.getElementById('ms').value;
+  if(mMode==='text'){
+    const content=document.getElementById('mc').value.trim();
+    if(!content){notify('Введи текст лекции');return;}
+    if(editId){
+      const m=db.materials.find(x=>x.id===editId);
+      if(m.hasPDF) await PDB.del('pdf_m_'+editId);
+      Object.assign(m,{title:n,subject:subj,content,hasPDF:false});
+    } else {
+      db.materials.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,date:new Date().toLocaleDateString('ru')});
+    }
   } else {
-    db.materials.unshift({id:Date.now(),title:n,subject:document.getElementById('ms').value,content,date:new Date().toLocaleDateString('ru')});
-    closeModal(); notify('✓ Лекция добавлена'); saveDB(); navigate('t-materials');
+    if(!mPdfFile&&!(editId&&db.materials.find(x=>x.id===editId)?.hasPDF)){notify('Загрузи PDF файл');return;}
+    if(editId){
+      const m=db.materials.find(x=>x.id===editId);
+      if(mPdfFile){const b64=await readFileAsB64(mPdfFile);await PDB.put('pdf_m_'+editId,b64);}
+      Object.assign(m,{title:n,subject:subj,content:'',hasPDF:true});
+    } else {
+      const id=Date.now();
+      const b64=await readFileAsB64(mPdfFile);
+      await PDB.put('pdf_m_'+id,b64);
+      db.materials.unshift({id,title:n,subject:subj,content:'',hasPDF:true,date:new Date().toLocaleDateString('ru')});
+    }
+  }
+  mPdfFile=null; saveDB(); closeModal();
+  notify(editId?'✓ Лекция обновлена':'✓ Лекция добавлена');
+  if(editId) pgTMaterials(); else navigate('t-materials');
+}
+async function viewMaterialModal(id){
+  const m=db.materials.find(x=>x.id===id);
+  const tag=`<span class="tag ${m.subject==='Физика'?'t-am':'t-pu'}">${m.subject}</span><span style="font-size:12px;color:var(--mu);margin-left:10px">${m.date}</span>`;
+  if(m.hasPDF){
+    openModal(m.title,`<div style="margin-bottom:10px">${tag}</div><div style="text-align:center;padding:20px;color:var(--mu)">Загрузка PDF...</div>`);
+    const url=await getPDFUrl('pdf_m_'+id);
+    const body=document.getElementById('modal-body');
+    if(url&&body) body.innerHTML=`<div style="margin-bottom:10px">${tag}</div><iframe src="${url}" style="width:100%;height:72vh;border:none;border-radius:10px"></iframe>`;
+    else if(body) body.innerHTML=`<div class="empty"><div class="empty-tx">PDF не найден</div></div>`;
+  } else {
+    openModal(m.title,`<div style="margin-bottom:12px">${tag}</div><div style="font-size:14px;line-height:1.9;white-space:pre-wrap;color:var(--tx)">${m.content}</div>`);
   }
 }
-function deleteMaterial(id){if(!confirm('Удалить лекцию?'))return;db.materials=db.materials.filter(m=>m.id!==id);saveDB();notify('Удалено');pgTMaterials();}
+async function deleteMaterial(id){
+  if(!confirm('Удалить лекцию?'))return;
+  await PDB.del('pdf_m_'+id);
+  db.materials=db.materials.filter(m=>m.id!==id);saveDB();notify('Удалено');pgTMaterials();
+}
 
 // ══════ ШПАРГАЛКИ (учитель) ══════
 function pgTCheatsheets(){
@@ -1020,45 +1132,100 @@ function pgTCheatsheets(){
   </div>`;
 }
 function openCreateCheatsheet(){
+  csMode='text'; csPdfFile=null;
   openModal('Новая шпаргалка',`
     <div class="fg"><label class="fl">Название</label><input class="fi" id="cn" placeholder="Формулы кинематики"></div>
-    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs"><option>Математика</option><option>Физика</option></select></div>
-    <div class="fg"><label class="fl">Содержание</label><textarea class="ft" id="cc" style="min-height:200px" placeholder="Самое важное — кратко и по делу..."></textarea></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px">
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs-subj"><option>Математика</option><option>Физика</option></select></div>
+    ${modePicker('cs','text')}
+    <div id="cs-text-area">
+      <div class="fg"><label class="fl">Содержание (поддерживается LaTeX: $формула$)</label><textarea class="ft" id="cc" style="min-height:180px" placeholder="Самое важное — кратко&#10;&#10;LaTeX: $v = v_0 + at$"></textarea></div>
+    </div>
+    <div id="cs-pdf-area" style="display:none">
+      <div class="upzone" onclick="document.getElementById('cspdf-inp').click()">
+        <div style="font-size:28px;margin-bottom:6px">📎</div>
+        <div style="font-size:13px;color:var(--mu)">Нажми чтобы выбрать PDF</div>
+        <div id="cspdf-name" style="font-size:12px;color:var(--ac2);margin-top:6px"></div>
+      </div>
+      <input type="file" id="cspdf-inp" accept=".pdf" style="display:none" onchange="csPdfFile=this.files[0];document.getElementById('cspdf-name').textContent=this.files[0]?.name||''">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveCheatsheet()">Опубликовать</button>
     </div>`);
 }
 function openEditCheatsheet(id){
   const c=db.cheatsheets.find(x=>x.id===id);
+  csMode=c.hasPDF?'pdf':'text'; csPdfFile=null;
   openModal('Редактировать шпаргалку',`
     <div class="fg"><label class="fl">Название</label><input class="fi" id="cn" value="${c.title.replace(/"/g,'&quot;')}"></div>
-    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs"><option ${c.subject==='Математика'?'selected':''}>Математика</option><option ${c.subject==='Физика'?'selected':''}>Физика</option></select></div>
-    <div class="fg"><label class="fl">Содержание</label><textarea class="ft" id="cc" style="min-height:200px">${c.content}</textarea></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px">
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs-subj"><option ${c.subject==='Математика'?'selected':''}>Математика</option><option ${c.subject==='Физика'?'selected':''}>Физика</option></select></div>
+    ${modePicker('cs',csMode)}
+    <div id="cs-text-area" style="${csMode==='pdf'?'display:none':''}">
+      <div class="fg"><label class="fl">Содержание (поддерживается LaTeX)</label><textarea class="ft" id="cc" style="min-height:180px">${c.content||''}</textarea></div>
+    </div>
+    <div id="cs-pdf-area" style="${csMode==='text'?'display:none':''}">
+      ${c.hasPDF?`<div style="padding:12px;background:var(--s2);border-radius:var(--r2);margin-bottom:10px;font-size:13px;color:var(--gr)">✓ PDF загружен.</div>`:''}
+      <div class="upzone" onclick="document.getElementById('cspdf-inp').click()">
+        <div style="font-size:28px;margin-bottom:6px">📎</div>
+        <div style="font-size:13px;color:var(--mu)">${c.hasPDF?'Заменить PDF':'Выбрать PDF'}</div>
+        <div id="cspdf-name" style="font-size:12px;color:var(--ac2);margin-top:6px"></div>
+      </div>
+      <input type="file" id="cspdf-inp" accept=".pdf" style="display:none" onchange="csPdfFile=this.files[0];document.getElementById('cspdf-name').textContent=this.files[0]?.name||''">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       <button class="btn btn-g" onclick="closeModal()">Отмена</button>
       <button class="btn btn-p" onclick="saveCheatsheet(${id})">Сохранить</button>
     </div>`);
 }
-function saveCheatsheet(editId){
+async function saveCheatsheet(editId){
   const n=document.getElementById('cn').value.trim();
   if(!n){notify('Введи название');return;}
-  const content=document.getElementById('cc').value.trim();
-  if(!content){notify('Введи содержание');return;}
-  if(editId){
-    const c=db.cheatsheets.find(x=>x.id===editId);
-    c.title=n; c.subject=document.getElementById('cs').value; c.content=content;
-    saveDB(); closeModal(); notify('✓ Шпаргалка обновлена'); pgTCheatsheets();
+  const subj=document.getElementById('cs-subj').value;
+  if(csMode==='text'){
+    const content=document.getElementById('cc').value.trim();
+    if(!content){notify('Введи содержание');return;}
+    if(editId){
+      const c=db.cheatsheets.find(x=>x.id===editId);
+      if(c.hasPDF) await PDB.del('pdf_cs_'+editId);
+      Object.assign(c,{title:n,subject:subj,content,hasPDF:false});
+    } else {
+      db.cheatsheets.unshift({id:Date.now(),title:n,subject:subj,content,hasPDF:false,date:new Date().toLocaleDateString('ru')});
+    }
   } else {
-    db.cheatsheets.unshift({id:Date.now(),title:n,subject:document.getElementById('cs').value,content,date:new Date().toLocaleDateString('ru')});
-    closeModal(); notify('✓ Шпаргалка добавлена'); saveDB(); navigate('t-cheatsheets');
+    if(!csPdfFile&&!(editId&&db.cheatsheets.find(x=>x.id===editId)?.hasPDF)){notify('Загрузи PDF файл');return;}
+    if(editId){
+      const c=db.cheatsheets.find(x=>x.id===editId);
+      if(csPdfFile){const b64=await readFileAsB64(csPdfFile);await PDB.put('pdf_cs_'+editId,b64);}
+      Object.assign(c,{title:n,subject:subj,content:'',hasPDF:true});
+    } else {
+      const id=Date.now();
+      const b64=await readFileAsB64(csPdfFile);
+      await PDB.put('pdf_cs_'+id,b64);
+      db.cheatsheets.unshift({id,title:n,subject:subj,content:'',hasPDF:true,date:new Date().toLocaleDateString('ru')});
+    }
+  }
+  csPdfFile=null; saveDB(); closeModal();
+  notify(editId?'✓ Шпаргалка обновлена':'✓ Шпаргалка добавлена');
+  if(editId) pgTCheatsheets(); else navigate('t-cheatsheets');
+}
+async function viewCheatsheet(id){
+  const c=db.cheatsheets.find(x=>x.id===id);
+  const tag=`<span class="tag ${c.subject==='Физика'?'t-am':'t-pu'}">${c.subject}</span>`;
+  if(c.hasPDF){
+    openModal(c.title,`<div style="margin-bottom:10px">${tag}</div><div style="text-align:center;padding:20px;color:var(--mu)">Загрузка PDF...</div>`);
+    const url=await getPDFUrl('pdf_cs_'+id);
+    const body=document.getElementById('modal-body');
+    if(url&&body) body.innerHTML=`<div style="margin-bottom:10px">${tag}</div><iframe src="${url}" style="width:100%;height:72vh;border:none;border-radius:10px"></iframe>`;
+    else if(body) body.innerHTML=`<div class="empty"><div class="empty-tx">PDF не найден</div></div>`;
+  } else {
+    openModal(c.title,`<div style="margin-bottom:12px">${tag}</div><div style="font-size:14px;line-height:1.9;white-space:pre-wrap;color:var(--tx)">${c.content}</div>`);
   }
 }
-function viewCheatsheet(id){
-  const c=db.cheatsheets.find(x=>x.id===id);
-  openModal(c.title,`<div style="font-size:14px;line-height:1.85;white-space:pre-wrap;color:var(--tx)">${c.content}</div>`);
+async function deleteCheatsheet(id){
+  if(!confirm('Удалить шпаргалку?'))return;
+  await PDB.del('pdf_cs_'+id);
+  db.cheatsheets=db.cheatsheets.filter(c=>c.id!==id);saveDB();notify('Удалено');pgTCheatsheets();
 }
-function deleteCheatsheet(id){if(!confirm('Удалить шпаргалку?'))return;db.cheatsheets=db.cheatsheets.filter(c=>c.id!==id);saveDB();notify('Удалено');pgTCheatsheets();}
 
 // ══════ STUDENTS ══════
 function pgTStudents(){
@@ -1214,12 +1381,7 @@ function pgSMaterials(){
       </div>`).join('')||'<div class="empty"><div class="empty-ic">📄</div><div class="empty-tx">Лекций пока нет</div></div>'}
   </div>`;
 }
-function viewMaterialStudent(id){
-  const m=db.materials.find(x=>x.id===id);
-  openModal(m.title,`
-    <div style="margin-bottom:12px"><span class="tag ${m.subject==='Физика'?'t-am':'t-pu'}">${m.subject}</span><span style="font-size:12px;color:var(--mu);margin-left:10px">${m.date}</span></div>
-    <div style="font-size:14px;line-height:1.9;white-space:pre-wrap;color:var(--tx)">${m.content}</div>`);
-}
+function viewMaterialStudent(id){ viewMaterialModal(id); }
 
 // ══════ ШПАРГАЛКИ (ученик) ══════
 function pgSCheatsheets(){
@@ -1243,7 +1405,7 @@ function pgSCheatsheets(){
 }
 
 // ══════ HELPERS ══════
-function openModal(title,body){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-overlay').classList.add('open');}
+function openModal(title,body){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-overlay').classList.add('open');setTimeout(()=>renderMath(document.getElementById('modal-body')),80);}
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function bgClose(e){if(e.target.id==='modal-overlay')closeModal();}
 function notify(msg){const n=document.getElementById('notif');document.getElementById('notif-text').textContent=msg;n.classList.add('show');clearTimeout(n._t);n._t=setTimeout(()=>n.classList.remove('show'),2800);}
