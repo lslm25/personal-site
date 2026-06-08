@@ -186,6 +186,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);min-hei
 .topt.wrong{border-color:var(--re);background:var(--reb);color:var(--re)}
 .topt-radio{width:16px;height:16px;border-radius:50%;border:2px solid var(--b2);flex-shrink:0;transition:all .15s}
 .topt.selected .topt-radio,.topt.correct .topt-radio{background:currentColor;border-color:currentColor}
+.topt-check{width:16px;height:16px;border-radius:4px;border:2px solid var(--b2);flex-shrink:0;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.topt.selected .topt-check,.topt.correct .topt-check{background:currentColor;border-color:currentColor}
+.topt.selected .topt-check::after,.topt.correct .topt-check::after{content:'✓';font-size:9px;color:#fff;font-weight:800;line-height:1}
 
 .opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .opt-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--b2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -1004,7 +1007,7 @@ function pgTTests(){
     }).join('')||'<div class="empty"><div class="empty-ic">⊞</div><div class="empty-tx">Нет тестов</div></div>'}
   </div>`;
 }
-function openCreateTest(){buildQs=[{text:'',opts:['','','',''],ans:0}];buildQImgs={};openModal('Создать тест',buildTestForm());}
+function openCreateTest(){buildQs=[{text:'',opts:['','','',''],ans:[]}];buildQImgs={};openModal('Создать тест',buildTestForm());}
 function buildTestForm(){
   const sc=db.students.map(s=>`<label style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--b1);margin-bottom:7px;background:var(--s2)" onmouseover="this.style.borderColor='var(--ac2)'" onmouseout="this.style.borderColor='var(--b1)'"><input type="checkbox" value="${s.email}" id="ts-a-${s.email.replace('@','_')}" style="accent-color:var(--ac2);width:15px;height:15px"><div><div style="font-size:13px;font-weight:500">${s.name}</div><div style="font-size:11px;color:var(--mu)">${s.email}</div></div></label>`).join('');
   return`<div class="fg"><label class="fl">Название</label><input class="fi" id="tn" placeholder="Название теста"></div>
@@ -1017,16 +1020,22 @@ function buildTestForm(){
 }
 function toggleAllTest(v){db.students.forEach(s=>{const el=document.getElementById('ts-a-'+s.email.replace('@','_'));if(el)el.checked=v;});}
 function renderQB(q,qi){
+  const ans=Array.isArray(q.ans)?q.ans:(q.ans!=null?[q.ans]:[]);
   const imgPrev=buildQImgs[qi]?`<div style="margin:8px 0;display:flex;align-items:flex-start;gap:8px"><img src="${buildQImgs[qi]}" style="max-width:180px;max-height:130px;border-radius:8px;border:2px solid var(--b2);object-fit:cover"><button onclick="delete buildQImgs[${qi}];document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('')" style="padding:3px 8px;background:var(--reb);border:none;border-radius:5px;color:var(--re);cursor:pointer;font-size:11px">✕</button></div>`:'';
   return`<div class="qcard"><div class="qnum">Вопрос ${qi+1}</div>
     <input class="fi" style="margin-bottom:8px" placeholder="Текст вопроса (поддерживается LaTeX: $...$)" value="${q.text}" oninput="buildQs[${qi}].text=this.value">
     ${imgPrev}
     <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--s2);border:1px solid var(--b2);border-radius:8px;cursor:pointer;font-size:12px;color:var(--mu);margin-bottom:10px">📷 Фото к вопросу<input type="file" accept="image/*" style="display:none" onchange="handleQImg(${qi},this)"></label>
-    ${q.opts.map((o,oi)=>`<div class="opt-row"><div class="opt-dot ${q.ans===oi?'ok':''}" onclick="setAns(${qi},${oi})"></div><input class="opt-inp" placeholder="Вариант ${oi+1}" value="${o}" oninput="buildQs[${qi}].opts[${oi}]=this.value"></div>`).join('')}
-    <div style="font-size:11px;color:var(--mu);margin-top:4px">Нажми кружок — верный ответ</div></div>`;
+    ${q.opts.map((o,oi)=>`<div class="opt-row"><div class="opt-dot ${ans.includes(oi)?'ok':''}" onclick="setAns(${qi},${oi})"></div><input class="opt-inp" placeholder="Вариант ${oi+1}" value="${o}" oninput="buildQs[${qi}].opts[${oi}]=this.value"></div>`).join('')}
+    <div style="font-size:11px;color:var(--mu);margin-top:4px">Отметь все верные ответы (можно несколько)</div></div>`;
 }
-function setAns(qi,oi){buildQs[qi].ans=oi;document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');}
-function addQ(){buildQs.push({text:'',opts:['','','',''],ans:0});document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');}
+function setAns(qi,oi){
+  if(!Array.isArray(buildQs[qi].ans)) buildQs[qi].ans=[];
+  const idx=buildQs[qi].ans.indexOf(oi);
+  if(idx===-1) buildQs[qi].ans.push(oi); else buildQs[qi].ans.splice(idx,1);
+  document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');
+}
+function addQ(){buildQs.push({text:'',opts:['','','',''],ans:[]});document.getElementById('qlist').innerHTML=buildQs.map(renderQB).join('');}
 async function saveTest(){
   const n=document.getElementById('tn').value.trim();if(!n){notify('Введи название');return;}
   const qs=buildQs.filter(q=>q.text.trim()&&q.opts.filter(o=>o.trim()).length>=2);if(!qs.length){notify('Добавь вопросы');return;}
@@ -1427,7 +1436,7 @@ function renderTestUI(t,qImgs={}){
     <div style="margin-bottom:22px">
       <div style="font-size:15px;font-weight:500;margin-bottom:10px;line-height:1.55">${qi+1}. ${q.text}</div>
       ${qImgs[qi]?`<img src="${qImgs[qi]}" style="max-width:100%;max-height:280px;border-radius:10px;margin-bottom:12px;object-fit:contain;border:1px solid var(--b2)">`:''}
-      ${q.opts.map((o,oi)=>`<div class="topt" id="to-${qi}-${oi}" onclick="pickOpt(${qi},${oi},${t.id})"><div class="topt-radio"></div>${o}</div>`).join('')}
+      ${q.opts.map((o,oi)=>`<div class="topt" id="to-${qi}-${oi}" onclick="pickOpt(${qi},${oi},${t.id})"><div class="topt-check"></div>${o}</div>`).join('')}
     </div>`).join('')}
   <div id="score-box"></div>
   <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
@@ -1435,11 +1444,32 @@ function renderTestUI(t,qImgs={}){
     <button class="btn btn-p" id="check-btn" onclick="checkTest(${t.id})">Проверить</button>
   </div>`;
 }
-function pickOpt(qi,oi,tid){if(testSess.done)return;testSess.answers[qi]=oi;const t=db.tests.find(x=>x.id===tid);t.questions.forEach((_,i)=>t.questions[i].opts.forEach((_,j)=>{const el=document.getElementById(`to-${i}-${j}`);if(el)el.classList.toggle('selected',i===qi&&j===oi);}));}
+function pickOpt(qi,oi,tid){
+  if(testSess.done)return;
+  if(!Array.isArray(testSess.answers[qi])) testSess.answers[qi]=[];
+  const idx=testSess.answers[qi].indexOf(oi);
+  if(idx===-1) testSess.answers[qi].push(oi); else testSess.answers[qi].splice(idx,1);
+  const t=db.tests.find(x=>x.id===tid);
+  t.questions[qi].opts.forEach((_,j)=>{
+    const el=document.getElementById(`to-${qi}-${j}`);
+    if(el) el.classList.toggle('selected',testSess.answers[qi].includes(j));
+  });
+}
 function checkTest(id){
   if(testSess.done)return;testSess.done=true;
   const t=db.tests.find(x=>x.id===id);let score=0;
-  t.questions.forEach((q,qi)=>{const chosen=testSess.answers[qi];q.opts.forEach((_,oi)=>{const el=document.getElementById(`to-${qi}-${oi}`);if(!el)return;el.classList.remove('selected');if(oi===q.ans)el.classList.add('correct');else if(oi===chosen&&chosen!==q.ans)el.classList.add('wrong');});if(chosen===q.ans)score++;});
+  t.questions.forEach((q,qi)=>{
+    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).slice().sort((a,b)=>a-b);
+    const chosen=(testSess.answers[qi]||[]).slice().sort((a,b)=>a-b);
+    const ok=correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
+    q.opts.forEach((_,oi)=>{
+      const el=document.getElementById(`to-${qi}-${oi}`);if(!el)return;
+      el.classList.remove('selected');
+      if(correct.includes(oi)) el.classList.add('correct');
+      else if(chosen.includes(oi)) el.classList.add('wrong');
+    });
+    if(ok)score++;
+  });
   t.results=t.results.filter(r=>r.email!==session.email);t.results.push({email:session.email,name:session.name,score,total:t.questions.length});saveDB();
   const pct=Math.round(score/t.questions.length*100);
   document.getElementById('score-box').innerHTML=`<div style="text-align:center;padding:24px;background:var(--s2);border-radius:14px;margin-top:14px;border:1px solid var(--b1)"><div style="font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:800;color:${pct>=80?'var(--gr)':pct>=60?'var(--am)':'var(--re)'}">${score}/${t.questions.length}</div><div style="font-size:13px;color:var(--mu);margin-top:6px">${pct>=80?'Отлично! 🎉':pct>=60?'Хорошо, есть что повторить':'Разберём на уроке'}</div></div>`;
