@@ -598,7 +598,7 @@ if(CONFIG.emailjsReady) emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
 // ══════════════════════════════════════════════════════
 // DB
 // ══════════════════════════════════════════════════════
-const db={approvedEmails:[],pendingEmails:[],students:[],hw:[],tests:[],videos:[]};
+const db={approvedEmails:[],pendingEmails:[],students:[],hw:[],tests:[],materials:[],cheatsheets:[]};
 const session={role:null,email:null,name:null};
 let buildQs=[], buildTasks=[], taskFiles={}, testSess={};
 
@@ -607,7 +607,7 @@ function loadDB(){try{const s=localStorage.getItem('solv_db');if(s)Object.assign
 function saveSession(){try{localStorage.setItem('solv_sess',JSON.stringify(session));}catch(e){}}
 function loadSession(){try{const s=localStorage.getItem('solv_sess');if(s)Object.assign(session,JSON.parse(s));}catch(e){}}
 
-['hw','tests','videos','students','approvedEmails','pendingEmails'].forEach(key=>{
+['hw','tests','materials','cheatsheets','students','approvedEmails','pendingEmails'].forEach(key=>{
   const arr=db[key];
   ['push','unshift','splice','pop','shift'].forEach(m=>{
     const orig=Array.prototype[m];
@@ -686,11 +686,11 @@ function logout(){
 const navDefs={
   teacher:[
     {sec:'Обзор',items:[{id:'dashboard',icon:'◈',label:'Панель учителя'}]},
-    {sec:'Материалы',items:[{id:'t-hw',icon:'✎',label:'Домашние задания'},{id:'t-tests',icon:'⊞',label:'Тесты'},{id:'t-videos',icon:'▶',label:'Записи уроков'}]},
+    {sec:'Материалы',items:[{id:'t-hw',icon:'✎',label:'Домашние задания'},{id:'t-tests',icon:'⊞',label:'Тесты'},{id:'t-materials',icon:'📄',label:'Лекции'},{id:'t-cheatsheets',icon:'⚡',label:'Шпаргалки'}]},
     {sec:'Ученики',items:[{id:'t-students',icon:'◉',label:'Мои ученики'},{id:'t-access',icon:'🔑',label:'Заявки на доступ',badge:()=>db.pendingEmails.length||'',badgeClass:'am'}]},
   ],
   student:[
-    {sec:'Моя страница',items:[{id:'s-home',icon:'◈',label:'Главная'},{id:'s-hw',icon:'✎',label:'Задания',badge:()=>db.hw.filter(h=>myHW(h)).length+''},{id:'s-tests',icon:'⊞',label:'Тесты'},{id:'s-videos',icon:'▶',label:'Записи'}]},
+    {sec:'Моя страница',items:[{id:'s-home',icon:'◈',label:'Главная'},{id:'s-hw',icon:'✎',label:'Задания',badge:()=>db.hw.filter(h=>myHW(h)).length+''},{id:'s-tests',icon:'⊞',label:'Тесты'},{id:'s-materials',icon:'📄',label:'Лекции'},{id:'s-cheatsheets',icon:'⚡',label:'Шпаргалки'}]},
   ],
 };
 function myHW(h){return !h.assignees||!h.assignees.length||h.assignees.includes(session.email);}
@@ -702,8 +702,8 @@ function renderNav(){
     <div class="sb-sec">${sec.sec}</div>
     ${sec.items.map(it=>{const b=it.badge?it.badge():'';return`<button class="sb-item ${curPage===it.id?'on':''}" onclick="navigate('${it.id}')"><span class="sb-icon">${it.icon}</span>${it.label}${b?`<span class="sb-badge ${it.badgeClass||''}">${b}</span>`:''}</button>`;}).join('')}`).join('');
 }
-const titles={dashboard:'Панель учителя','t-hw':'Домашние задания','t-tests':'Тесты','t-videos':'Записи уроков','t-students':'Ученики','t-access':'Заявки на доступ','s-home':'Моя страница','s-hw':'Задания','s-tests':'Тесты','s-videos':'Записи'};
-const pageMap={dashboard:pgDashboard,'t-hw':pgTHW,'t-tests':pgTTests,'t-videos':pgTVideos,'t-students':pgTStudents,'t-access':pgTAccess,'s-home':pgSHome,'s-hw':pgSHW,'s-tests':pgSTests,'s-videos':pgSVideos};
+const titles={dashboard:'Панель учителя','t-hw':'Домашние задания','t-tests':'Тесты','t-materials':'Лекции','t-cheatsheets':'Шпаргалки','t-students':'Ученики','t-access':'Заявки на доступ','s-home':'Моя страница','s-hw':'Задания','s-tests':'Тесты','s-materials':'Лекции','s-cheatsheets':'Шпаргалки'};
+const pageMap={dashboard:pgDashboard,'t-hw':pgTHW,'t-tests':pgTTests,'t-materials':pgTMaterials,'t-cheatsheets':pgTCheatsheets,'t-students':pgTStudents,'t-access':pgTAccess,'s-home':pgSHome,'s-hw':pgSHW,'s-tests':pgSTests,'s-materials':pgSMaterials,'s-cheatsheets':pgSCheatsheets};
 function renderPage(){document.getElementById('topbar-title').textContent=titles[curPage]||'';document.getElementById('topbar-actions').innerHTML='';const fn=pageMap[curPage];if(fn)fn();}
 function setupBanner(){return CONFIG.emailjsReady?'':`<div class="setup-warn on">⚠️ EmailJS не настроен — письма не отправляются. Заявки видны в разделе «Заявки».</div>`;}
 
@@ -941,14 +941,124 @@ function saveTest(){
 }
 function deleteTest(id){db.tests=db.tests.filter(t=>t.id!==id);saveDB();notify('Удалено');pgTTests();}
 
-// ══════ VIDEOS ══════
-function pgTVideos(){
-  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-p" onclick="openAddVideo()">+ Добавить</button>`;
-  document.getElementById('main-content').innerHTML=`<div>${db.videos.map(v=>`<div class="vi"><div class="vi-th"><div class="play-t"></div><div class="vi-dur">${v.dur}</div></div><div class="vi-info"><div class="vi-t">${v.title}</div><div class="vi-m">${v.subject} · ${v.date}</div></div><span class="tag ${v.subject==='Физика'?'t-am':'t-pu'}">${v.subject}</span><button class="btn btn-ic" style="margin-left:8px" onclick="deleteVideo(${v.id})">✕</button></div>`).join('')||'<div class="empty"><div class="empty-ic">▶</div><div class="empty-tx">Нет записей</div></div>'}</div>`;
+// ══════ ЛЕКЦИИ (учитель) ══════
+function pgTMaterials(){
+  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-p" onclick="openCreateMaterial()">+ Добавить лекцию</button>`;
+  document.getElementById('main-content').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${
+    db.materials.map(m=>`
+      <div class="li" style="cursor:default">
+        <div class="li-ic" style="background:${m.subject==='Физика'?'rgba(245,158,11,.12)':'rgba(124,58,237,.12)'};color:${m.subject==='Физика'?'var(--am)':'var(--ac2)'}">${m.subject==='Физика'?'Ф':'М'}</div>
+        <div class="li-b">
+          <div class="li-t">${m.title}</div>
+          <div class="li-m">${m.subject} · ${m.date}</div>
+        </div>
+        <div class="li-a" style="flex-direction:row;align-items:center;gap:6px">
+          <button class="btn btn-g btn-sm" onclick="openEditMaterial(${m.id})">✎ Ред.</button>
+          <button class="btn btn-ic btn-sm" onclick="deleteMaterial(${m.id})">✕</button>
+        </div>
+      </div>`).join('')||'<div class="empty"><div class="empty-ic">📄</div><div class="empty-tx">Нет лекций</div></div>'}
+  </div>`;
 }
-function openAddVideo(){openModal('Добавить запись',`<div class="fg"><label class="fl">Название</label><input class="fi" id="vn" placeholder="Тема..."></div><div class="g2" style="gap:12px"><div class="fg"><label class="fl">Предмет</label><select class="fs" id="vs"><option>Математика</option><option>Физика</option></select></div><div class="fg"><label class="fl">Дата</label><input class="fi" id="vd" placeholder="28 апр"></div></div><div class="fg"><label class="fl">Длительность</label><input class="fi" id="vdur" placeholder="47 мин"></div><div class="fg"><label class="fl">Ссылка</label><input class="fi" id="vurl" placeholder="https://youtube.com/..."></div><div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Отмена</button><button class="btn btn-p" onclick="saveVideo()">Добавить</button></div>`);}
-function saveVideo(){const n=document.getElementById('vn').value.trim();if(!n){notify('Введи название');return;}db.videos.unshift({id:Date.now(),title:n,subject:document.getElementById('vs').value,date:document.getElementById('vd').value||'сегодня',dur:document.getElementById('vdur').value||'—',url:document.getElementById('vurl').value});closeModal();notify('✓ Добавлено');saveDB();navigate('t-videos');}
-function deleteVideo(id){db.videos=db.videos.filter(v=>v.id!==id);saveDB();notify('Удалено');pgTVideos();}
+function openCreateMaterial(){
+  openModal('Новая лекция',`
+    <div class="fg"><label class="fl">Название</label><input class="fi" id="mn" placeholder="Производная функции — основы"></div>
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="ms"><option>Математика</option><option>Физика</option></select></div>
+    <div class="fg"><label class="fl">Текст лекции</label><textarea class="ft" id="mc" style="min-height:260px" placeholder="Введите текст лекции..."></textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-g" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-p" onclick="saveMaterial()">Опубликовать</button>
+    </div>`);
+}
+function openEditMaterial(id){
+  const m=db.materials.find(x=>x.id===id);
+  openModal('Редактировать лекцию',`
+    <div class="fg"><label class="fl">Название</label><input class="fi" id="mn" value="${m.title.replace(/"/g,'&quot;')}"></div>
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="ms"><option ${m.subject==='Математика'?'selected':''}>Математика</option><option ${m.subject==='Физика'?'selected':''}>Физика</option></select></div>
+    <div class="fg"><label class="fl">Текст лекции</label><textarea class="ft" id="mc" style="min-height:260px">${m.content}</textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-g" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-p" onclick="saveMaterial(${id})">Сохранить</button>
+    </div>`);
+}
+function saveMaterial(editId){
+  const n=document.getElementById('mn').value.trim();
+  if(!n){notify('Введи название');return;}
+  const content=document.getElementById('mc').value.trim();
+  if(!content){notify('Введи текст лекции');return;}
+  if(editId){
+    const m=db.materials.find(x=>x.id===editId);
+    m.title=n; m.subject=document.getElementById('ms').value; m.content=content;
+    saveDB(); closeModal(); notify('✓ Лекция обновлена'); pgTMaterials();
+  } else {
+    db.materials.unshift({id:Date.now(),title:n,subject:document.getElementById('ms').value,content,date:new Date().toLocaleDateString('ru')});
+    closeModal(); notify('✓ Лекция добавлена'); saveDB(); navigate('t-materials');
+  }
+}
+function deleteMaterial(id){if(!confirm('Удалить лекцию?'))return;db.materials=db.materials.filter(m=>m.id!==id);saveDB();notify('Удалено');pgTMaterials();}
+
+// ══════ ШПАРГАЛКИ (учитель) ══════
+function pgTCheatsheets(){
+  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-p" onclick="openCreateCheatsheet()">+ Добавить шпаргалку</button>`;
+  document.getElementById('main-content').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${
+    db.cheatsheets.map(c=>`
+      <div class="card">
+        <div class="card-h">
+          <div>
+            <div class="card-t">${c.title}</div>
+            <span class="tag ${c.subject==='Физика'?'t-am':'t-pu'}" style="margin-top:6px">${c.subject}</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ic btn-sm" onclick="openEditCheatsheet(${c.id})">✎</button>
+            <button class="btn btn-ic btn-sm" onclick="deleteCheatsheet(${c.id})">✕</button>
+          </div>
+        </div>
+        <div class="card-b">
+          <div style="font-size:13px;color:var(--mu);line-height:1.7;white-space:pre-wrap;max-height:140px;overflow:hidden;mask-image:linear-gradient(to bottom,black 60%,transparent)">${c.content}</div>
+          <button class="btn btn-g" style="width:100%;margin-top:12px" onclick="viewCheatsheet(${c.id})">Читать</button>
+        </div>
+      </div>`).join('')||'<div class="empty"><div class="empty-ic">⚡</div><div class="empty-tx">Нет шпаргалок</div></div>'}
+  </div>`;
+}
+function openCreateCheatsheet(){
+  openModal('Новая шпаргалка',`
+    <div class="fg"><label class="fl">Название</label><input class="fi" id="cn" placeholder="Формулы кинематики"></div>
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs"><option>Математика</option><option>Физика</option></select></div>
+    <div class="fg"><label class="fl">Содержание</label><textarea class="ft" id="cc" style="min-height:200px" placeholder="Самое важное — кратко и по делу..."></textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-g" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-p" onclick="saveCheatsheet()">Опубликовать</button>
+    </div>`);
+}
+function openEditCheatsheet(id){
+  const c=db.cheatsheets.find(x=>x.id===id);
+  openModal('Редактировать шпаргалку',`
+    <div class="fg"><label class="fl">Название</label><input class="fi" id="cn" value="${c.title.replace(/"/g,'&quot;')}"></div>
+    <div class="fg"><label class="fl">Предмет</label><select class="fs" id="cs"><option ${c.subject==='Математика'?'selected':''}>Математика</option><option ${c.subject==='Физика'?'selected':''}>Физика</option></select></div>
+    <div class="fg"><label class="fl">Содержание</label><textarea class="ft" id="cc" style="min-height:200px">${c.content}</textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-g" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-p" onclick="saveCheatsheet(${id})">Сохранить</button>
+    </div>`);
+}
+function saveCheatsheet(editId){
+  const n=document.getElementById('cn').value.trim();
+  if(!n){notify('Введи название');return;}
+  const content=document.getElementById('cc').value.trim();
+  if(!content){notify('Введи содержание');return;}
+  if(editId){
+    const c=db.cheatsheets.find(x=>x.id===editId);
+    c.title=n; c.subject=document.getElementById('cs').value; c.content=content;
+    saveDB(); closeModal(); notify('✓ Шпаргалка обновлена'); pgTCheatsheets();
+  } else {
+    db.cheatsheets.unshift({id:Date.now(),title:n,subject:document.getElementById('cs').value,content,date:new Date().toLocaleDateString('ru')});
+    closeModal(); notify('✓ Шпаргалка добавлена'); saveDB(); navigate('t-cheatsheets');
+  }
+}
+function viewCheatsheet(id){
+  const c=db.cheatsheets.find(x=>x.id===id);
+  openModal(c.title,`<div style="font-size:14px;line-height:1.85;white-space:pre-wrap;color:var(--tx)">${c.content}</div>`);
+}
+function deleteCheatsheet(id){if(!confirm('Удалить шпаргалку?'))return;db.cheatsheets=db.cheatsheets.filter(c=>c.id!==id);saveDB();notify('Удалено');pgTCheatsheets();}
 
 // ══════ STUDENTS ══════
 function pgTStudents(){
@@ -963,12 +1073,12 @@ function pgSHome(){
   document.getElementById('main-content').innerHTML=`
   <div class="hero-card">
     <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px">Привет, ${session.name}! 👋</div>
-    <div style="font-size:13px;color:var(--mu)">${db.hw.filter(h=>myHW(h)).length} заданий · ${db.tests.filter(t=>myHW(t)).length} тестов · ${db.videos.length} записей</div>
+    <div style="font-size:13px;color:var(--mu)">${db.hw.filter(h=>myHW(h)).length} заданий · ${db.tests.filter(t=>myHW(t)).length} тестов · ${db.materials.length} лекций · ${db.cheatsheets.length} шпаргалок</div>
   </div>
   <div class="stats">
     <div class="sc"><div class="sc-l">Заданий</div><div class="sc-v" style="color:var(--ac2)">${db.hw.length}</div></div>
     <div class="sc"><div class="sc-l">Тестов</div><div class="sc-v">${db.tests.length}</div></div>
-    <div class="sc"><div class="sc-l">Видео</div><div class="sc-v">${db.videos.length}</div></div>
+    <div class="sc"><div class="sc-l">Лекций</div><div class="sc-v">${db.materials.length}</div></div>
     <div class="sc"><div class="sc-l">Сдано</div><div class="sc-v" style="color:var(--gr)">${db.hw.filter(h=>myHW(h)&&h.answers.some(a=>a.email===session.email)).length}</div></div>
   </div>
   <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:14px">Активные задания</div>
@@ -1089,14 +1199,47 @@ function checkTest(id){
   document.getElementById('check-btn').style.display='none';
 }
 
-// ══════ VIDEOS (ученик) ══════
-function pgSVideos(){
-  document.getElementById('main-content').innerHTML=`<div>${db.videos.map(v=>`<div class="vi" onclick="playVid('${v.url}','${v.title}')"><div class="vi-th"><div class="play-t"></div><div class="vi-dur">${v.dur}</div></div><div class="vi-info"><div class="vi-t">${v.title}</div><div class="vi-m">${v.subject} · ${v.date}</div></div><span class="tag ${v.subject==='Физика'?'t-am':'t-pu'}">${v.subject}</span></div>`).join('')||'<div class="empty"><div class="empty-ic">▶</div><div class="empty-tx">Нет записей</div></div>'}</div>`;
+// ══════ ЛЕКЦИИ (ученик) ══════
+function pgSMaterials(){
+  const list=db.materials;
+  document.getElementById('main-content').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${
+    list.map(m=>`
+      <div class="li" onclick="viewMaterialStudent(${m.id})" style="cursor:pointer">
+        <div class="li-ic" style="background:${m.subject==='Физика'?'rgba(245,158,11,.12)':'rgba(124,58,237,.12)'};color:${m.subject==='Физика'?'var(--am)':'var(--ac2)'}">${m.subject==='Физика'?'Ф':'М'}</div>
+        <div class="li-b">
+          <div class="li-t">${m.title}</div>
+          <div class="li-m">${m.subject} · ${m.date}</div>
+        </div>
+        <span class="tag t-mu">Читать →</span>
+      </div>`).join('')||'<div class="empty"><div class="empty-ic">📄</div><div class="empty-tx">Лекций пока нет</div></div>'}
+  </div>`;
 }
-function playVid(url,title){
-  if(!url){openModal(title,'<div class="empty"><div class="empty-ic">▶</div><div class="empty-tx">Ссылка не добавлена</div></div>');return;}
-  let src=url;const yt=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);if(yt)src=`https://www.youtube.com/embed/${yt[1]}`;
-  openModal(title,`<iframe src="${src}" style="width:100%;aspect-ratio:16/9;border-radius:12px;border:none" allowfullscreen></iframe>`);
+function viewMaterialStudent(id){
+  const m=db.materials.find(x=>x.id===id);
+  openModal(m.title,`
+    <div style="margin-bottom:12px"><span class="tag ${m.subject==='Физика'?'t-am':'t-pu'}">${m.subject}</span><span style="font-size:12px;color:var(--mu);margin-left:10px">${m.date}</span></div>
+    <div style="font-size:14px;line-height:1.9;white-space:pre-wrap;color:var(--tx)">${m.content}</div>`);
+}
+
+// ══════ ШПАРГАЛКИ (ученик) ══════
+function pgSCheatsheets(){
+  const list=db.cheatsheets;
+  document.getElementById('main-content').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${
+    list.map(c=>`
+      <div class="card" style="cursor:pointer" onclick="viewCheatsheet(${c.id})">
+        <div class="card-h">
+          <div>
+            <div class="card-t">${c.title}</div>
+            <span class="tag ${c.subject==='Физика'?'t-am':'t-pu'}" style="margin-top:6px">${c.subject}</span>
+          </div>
+          <span class="tag t-gr">⚡</span>
+        </div>
+        <div class="card-b">
+          <div style="font-size:13px;color:var(--mu);line-height:1.7;white-space:pre-wrap;max-height:120px;overflow:hidden;mask-image:linear-gradient(to bottom,black 50%,transparent)">${c.content}</div>
+          <button class="btn btn-p" style="width:100%;margin-top:12px">Открыть</button>
+        </div>
+      </div>`).join('')||'<div class="empty"><div class="empty-ic">⚡</div><div class="empty-tx">Шпаргалок пока нет</div></div>'}
+  </div>`;
 }
 
 // ══════ HELPERS ══════
