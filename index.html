@@ -1053,6 +1053,7 @@ function addQ(){buildQs.push({text:'',opts:['','','',''],ans:[]});document.getEl
 async function saveTest(){
   const n=document.getElementById('tn').value.trim();if(!n){notify('Введи название');return;}
   const qs=buildQs.filter(q=>q.text.trim()&&q.opts.filter(o=>o.trim()).length>=2);if(!qs.length){notify('Добавь вопросы');return;}
+  if(qs.some(q=>!Array.isArray(q.ans)||q.ans.length===0)){notify('Отметь правильный ответ для каждого вопроса');return;}
   const assignees=db.students.map(s=>s.email).filter(e=>{const el=document.getElementById('ts-a-'+e.replace('@','_'));return el&&el.checked;});
   const testId=Date.now();
   for(let qi=0;qi<buildQs.length;qi++){
@@ -1080,9 +1081,9 @@ async function viewTestResult(testId, email){
       <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:${r.score/r.total>=.8?'var(--gr)':r.score/r.total>=.6?'var(--am)':'var(--re)'}">${r.score}/${r.total}</div>
     </div>
     ${t.questions.map((q,qi)=>{
-      const correctAns=(Array.isArray(q.ans)?q.ans:[q.ans]);
+      const correctAns=(Array.isArray(q.ans)?q.ans:[q.ans]).filter(x=>x!=null);
       const chosen=(r.details&&r.details[qi])||[];
-      const ok=correctAns.length===chosen.length&&correctAns.slice().sort().every((v,i)=>v===chosen.slice().sort()[i]);
+      const ok=correctAns.length>0&&correctAns.length===chosen.length&&correctAns.slice().sort((a,b)=>a-b).every((v,i)=>v===chosen.slice().sort((a,b)=>a-b)[i]);
       return`<div style="margin-bottom:16px;padding:14px;background:var(--s2);border:1px solid ${ok?'rgba(34,211,238,.2)':'rgba(244,63,94,.2)'};border-radius:var(--r2)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span style="font-size:11px;font-weight:700;color:var(--mu)">Вопрос ${qi+1}</span>
@@ -1591,9 +1592,9 @@ async function viewMyTestResult(testId){
     <div style="font-size:14px;color:var(--mu);margin-top:4px">${pct}% — ${pct>=80?'Отлично!':pct>=60?'Хорошо':'Нужно повторить'}</div>
   </div>`;
   t.questions.forEach((q,qi)=>{
-    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).slice().sort((a,b)=>a-b);
+    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).filter(x=>x!=null).slice().sort((a,b)=>a-b);
     const chosen=(r.details&&r.details[qi]?r.details[qi]:[]).slice().sort((a,b)=>a-b);
-    const ok=correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
+    const ok=correct.length>0&&correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
     html+=`<div class="qcard" style="margin-bottom:12px;border-left:3px solid ${ok?'var(--gr)':'var(--re)'}">
       <div style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.55">${qi+1}. ${q.text}</div>
       ${qImgs[qi]?`<img src="${qImgs[qi]}" style="max-width:100%;max-height:200px;border-radius:8px;margin-bottom:10px;object-fit:contain;border:1px solid var(--b2)">`:''}
@@ -1649,9 +1650,9 @@ function checkTest(id){
   if(testSess.done)return;testSess.done=true;
   const t=db.tests.find(x=>x.id===id);let score=0;
   t.questions.forEach((q,qi)=>{
-    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).slice().sort((a,b)=>a-b);
+    const correct=(Array.isArray(q.ans)?q.ans:[q.ans]).filter(x=>x!=null).slice().sort((a,b)=>a-b);
     const chosen=(testSess.answers[qi]||[]).slice().sort((a,b)=>a-b);
-    const ok=correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
+    const ok=correct.length>0&&correct.length===chosen.length&&correct.every((v,i)=>v===chosen[i]);
     q.opts.forEach((_,oi)=>{
       const el=document.getElementById(`to-${qi}-${oi}`);if(!el)return;
       el.classList.remove('selected');
